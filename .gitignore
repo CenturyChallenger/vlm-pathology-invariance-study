@@ -1,0 +1,37 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.pyc
+
+# Environments
+.venv/
+venv/
+env/
+.conda/
+
+# Data and outputs -- never commit patient data, embeddings, or slide imagery
+*.svs
+*.ndpi
+*.mrxs
+*.tif
+*.tiff
+*.h5
+*.hdf5
+wsi_data/
+embeddings/
+perturbed_tiles/
+downsampled/
+
+# Logs and checkpoints
+*.log
+production_progress.csv
+*.checkpoint
+
+# OS / editor
+.DS_Store
+.ipynb_checkpoints/
+*.swp
+
+# Credentials -- must never be committed
+.env
+*.token

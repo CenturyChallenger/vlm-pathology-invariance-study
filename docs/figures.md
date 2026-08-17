@@ -1,0 +1,121 @@
+# Figures pipeline (script 14: `make_figures.py`)
+
+`scripts/04_reporting/14_make_figures.py` generates the 13 Phase B results
+figures used in the dissertation, for both Model Cohort Option A and Option
+B. Each figure is written as both `.png` and `.svg` (26 output files total).
+
+## Usage
+
+The script resolves its `data/` and `figures/` directories relative to its
+own location by default, so it will look for input files in a `data/`
+subdirectory next to the script unless told otherwise:
+
+```bash
+# Generate all 13 figures (both options), reading from ./data next to the script
+python3 14_make_figures.py
+
+# Generate only one cohort configuration
+python3 14_make_figures.py --options a
+python3 14_make_figures.py --options b
+
+# Point at a specific Phase B output directory and output location
+python3 14_make_figures.py --data-dir /path/to/phase_b_output --out-dir /path/to/figures
+```
+
+The script fails fast with a clear error if `--data-dir` does not exist or
+is missing an expected file, rather than silently producing an empty or
+incorrect figure.
+
+## Input files
+
+Of the full Phase B output set (22 files: 11 per option, produced by script
+13), only these 10 (5 per option) are read:
+
+- `option_{a,b}_h1_model_main_effect.json` and `_cka.json`
+- `option_{a,b}_h2_demographic_main_effect.csv`
+- `option_{a,b}_h4_model_x_perturbation_interaction.json`
+- `option_{a,b}_pairwise_comparisons_bonferroni.csv`
+
+The remaining files (H2/H4/pairwise CKA variants, H3, and Option B's
+outlier-supplementary CSVs) are cited directly in the dissertation's tables
+and prose rather than plotted.
+
+## Output: 13 figures, each as PNG and SVG
+
+| Output file (base name) | Dissertation figure | Content |
+|---|---|---|
+| `shared_fig_5_1_phase_a_throughput` | Figure 5.1 | Phase A embedding extraction throughput by model (values hard-coded from the Phase A extraction log, not read from `data/`) |
+| `option_{a,b}_fig_5_2_cosine_heatmap` | Figure 5.2 | Cosine similarity to baseline at moderate severity, by perturbation x model, split by cohort (ACC / GDC) |
+| `option_{a,b}_fig_5_3_severity_trends` | Figure 5.3 | Mean cosine similarity vs. severity (mild/moderate/severe), one panel per perturbation category |
+| `option_{a,b}_fig_5_4_demographic_gap_heatmap` | Figure 5.4 | Demographic robustness gap (Cohen's d, ACC minus GDC) by perturbation x model, with Bonferroni-significance markers |
+| `option_{a,b}_fig_5_5_h4_perturbation_ranking` | Figure 5.5 | H4 mixed-effects perturbation coefficients, ranked, coloured by perturbation category |
+| `option_{a,b}_fig_5_6_h1_model_main_effect` | Figure 5.6 | H1 model main effect, cosine similarity and linear CKA side by side |
+| `option_{a,b}_fig_5_7_pairwise_comparison` | Figure 5.7 | Pairwise model comparison summary (mean Cohen's d per pair) |
+
+## Vector output (SVG)
+
+`matplotlib.pyplot.savefig()` supports SVG natively; every `fig_*` function
+calls a `save_both_formats()` helper that writes both `<name>.png` and
+`<name>.svg` from the same figure object. SVG preserves the figure as
+scalable paths and text rather than a fixed pixel grid, so it can be zoomed
+in on, printed at any size, or resized in a downstream document without
+pixellation.
+
+This matters for embedding into the dissertation `.docx`: the `docx` npm
+library (used by the separate `build_docx.js` conversion script, not
+included in this repository) supports embedding SVG directly via
+`ImageRun({ type: "svg", ... })`. This was verified end-to-end for this
+project, not just assumed from the library's documentation, by building a
+real `.docx` with an embedded SVG, converting it to PDF via the same
+LibreOffice headless pipeline this project's QA process uses, and inspecting
+the resulting PDF's raw content stream directly. That inspection confirmed
+LibreOffice renders the embedded SVG as genuine PDF vector path operators
+(`m`, `l`, `c`, `re`, `f*`, `S`), not a rasterised `/Image` XObject, so the
+vector quality survives through to the final PDF a reader actually opens.
+
+Word's own OOXML SVG support requires a raster fallback image alongside the
+SVG, for older Word versions and other tools that cannot render inline SVG.
+This is why every `.svg` file here has a same-named `.png` sibling generated
+alongside it: both are needed together when embedding, not just the SVG on
+its own.
+
+## Accessibility of the colour encoding (Appendix I)
+
+Colour alone is not a reliable encoding channel: roughly 1 in 12 men have
+some form of colour vision deficiency (most commonly red-green, i.e.
+deuteranopia/protanopia), and colour information is lost entirely under
+greyscale photocopying or printing. Every bar and line chart in this figure
+set therefore uses two independent, redundant encodings:
+
+1. **Colour**, drawn from the Okabe-Ito palette (Okabe & Ito, 2008; endorsed
+   by Wong, B. (2011), "Points of view: Color blindness", *Nature Methods*
+   8(6):441, DOI: [10.1038/nmeth.1618](https://doi.org/10.1038/nmeth.1618)),
+   designed to remain distinguishable under protanopia, deuteranopia, and
+   tritanopia.
+2. **Shape**: a unique bar hatch pattern per series, or a unique line style
+   + marker shape per series, which survives greyscale conversion
+   regardless of colour perception.
+
+Heatmaps use:
+
+- `viridis` (Figure 5.2, cosine similarity): perceptually uniform and
+  monotonically increasing in lightness, unlike `RdYlGn`, whose red/green
+  endpoints are the classic failure case for deuteranopia/protanopia and
+  collapse to similar greys under photocopying.
+- `PuOr` (Figure 5.4, demographic gap): a ColorBrewer diverging scheme
+  verified colourblind-safe, replacing `RdBu_r`'s red/blue endpoints, which
+  are harder to distinguish under tritanopia and whose red end is easily
+  confused with the green endpoints used elsewhere in this figure set under
+  deuteranopia/protanopia.
+
+Every heatmap cell is also annotated with its signed numeric value (plus a
+significance marker where relevant), computed against a luminance-based
+text-colour rule (`text_color_for()`, using the standard relative-luminance
+formula 0.2126R + 0.7152G + 0.0722B) rather than a hardcoded threshold, so
+annotation text stays legible regardless of which colormap is in use.
+
+**Residual limitation**: diverging heatmaps cannot fully guarantee that sign
+is recoverable from grey shade alone at moderate effect magnitudes. This is
+mitigated by the explicit signed numeric annotation in every cell (see
+above), but is noted here as a documented limitation rather than a solved
+problem.

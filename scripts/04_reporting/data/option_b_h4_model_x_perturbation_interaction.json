@@ -1,0 +1,87 @@
+{
+  "converged": true,
+  "fixed_effects": {
+    "C(perturbation_id)[T.10]": {
+      "coef": -0.15227462794787,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.11]": {
+      "coef": 0.06773402038286912,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.12]": {
+      "coef": -0.0292856148013548,
+      "p_value": 1.4570366034737378e-168
+    },
+    "C(perturbation_id)[T.13]": {
+      "coef": 0.10334169546791779,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.14]": {
+      "coef": -0.20650874548808673,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.15]": {
+      "coef": -0.18990821475522635,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.16]": {
+      "coef": 0.10628460817044907,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.17]": {
+      "coef": 0.05813039577928271,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.18]": {
+      "coef": 0.1119529605316322,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.2]": {
+      "coef": 0.0906494033615925,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.3]": {
+      "coef": 0.10188900320014402,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.4]": {
+      "coef": 0.043000575275332985,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.5]": {
+      "coef": -0.0008285166061176132,
+      "p_value": 0.43368148153114017
+    },
+    "C(perturbation_id)[T.6]": {
+      "coef": -0.02964537868303618,
+      "p_value": 1.1150870900198063e-172
+    },
+    "C(perturbation_id)[T.7]": {
+      "coef": -0.19066428792595805,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.8]": {
+      "coef": -0.24092345219972824,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.9]": {
+      "coef": -0.4497161066136156,
+      "p_value": 0.0
+    },
+    "Intercept": {
+      "coef": 0.8777408678644752,
+      "p_value": 1.0525754345481392e-27
+    }
+  },
+  "group_var_model_intercept": 0.019422531921272333,
+  "hypothesis": "H4_model_x_perturbation_interaction",
+  "log_likelihood": 344350.3825822603,
+  "metric": "cosine_similarity",
+  "models": [
+    "conch",
+    "gigapath_tile",
+    "uni"
+  ],
+  "n_observations": 624348
+}

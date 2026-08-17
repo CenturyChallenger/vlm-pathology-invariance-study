@@ -1,0 +1,87 @@
+{
+  "converged": true,
+  "fixed_effects": {
+    "C(perturbation_id)[T.10]": {
+      "coef": -0.13594815184800255,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.11]": {
+      "coef": 0.034848065473107405,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.12]": {
+      "coef": -0.041343746266499136,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.13]": {
+      "coef": 0.06203383912818429,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.14]": {
+      "coef": -0.19238190682118944,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.15]": {
+      "coef": -0.1818568790289967,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.16]": {
+      "coef": 0.060990364440990624,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.17]": {
+      "coef": 0.027596954534976653,
+      "p_value": 1.1089851879485305e-197
+    },
+    "C(perturbation_id)[T.18]": {
+      "coef": 0.06779149616560563,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.2]": {
+      "coef": 0.05327096903650467,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.3]": {
+      "coef": 0.06425365579773401,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.4]": {
+      "coef": 0.018909391195300843,
+      "p_value": 7.210632825202067e-94
+    },
+    "C(perturbation_id)[T.5]": {
+      "coef": -0.015559857637081008,
+      "p_value": 3.641865701493693e-64
+    },
+    "C(perturbation_id)[T.6]": {
+      "coef": -0.06322429040534473,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.7]": {
+      "coef": -0.15230580398431012,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.8]": {
+      "coef": -0.16865656256125755,
+      "p_value": 0.0
+    },
+    "C(perturbation_id)[T.9]": {
+      "coef": -0.3483672673701161,
+      "p_value": 0.0
+    },
+    "Intercept": {
+      "coef": 0.9220842298664229,
+      "p_value": 1.127415947527406e-39
+    }
+  },
+  "group_var_model_intercept": 0.014679860455837246,
+  "hypothesis": "H4_model_x_perturbation_interaction",
+  "log_likelihood": 431743.2574924985,
+  "metric": "cosine_similarity",
+  "models": [
+    "conch",
+    "quilt_llava",
+    "uni"
+  ],
+  "n_observations": 624348
+}

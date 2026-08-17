@@ -1,0 +1,43 @@
+{
+  "group_means": {
+    "conch": 0.8619642962962962,
+    "quilt_llava": 0.8380619444444446,
+    "uni": 0.9165213148148149
+  },
+  "group_sizes": {
+    "conch": 54,
+    "quilt_llava": 54,
+    "uni": 54
+  },
+  "hypothesis": "H1_model_main_effect",
+  "metric": "linear_cka",
+  "models": [
+    "conch",
+    "quilt_llava",
+    "uni"
+  ],
+  "omnibus_test": "kruskal_wallis",
+  "p_value": 0.0033731150374628816,
+  "posthoc": {
+    "method": "dunn",
+    "p_adj_matrix": {
+      "conch": {
+        "conch": 1.0,
+        "quilt_llava": 0.70119,
+        "uni": 0.097422
+      },
+      "quilt_llava": {
+        "conch": 0.70119,
+        "quilt_llava": 1.0,
+        "uni": 0.002612
+      },
+      "uni": {
+        "conch": 0.097422,
+        "quilt_llava": 0.002612,
+        "uni": 1.0
+      }
+    }
+  },
+  "significant_at_alpha": true,
+  "statistic": 11.383837236198827
+}

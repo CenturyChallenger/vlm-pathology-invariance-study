@@ -1,0 +1,87 @@
+{
+  "converged": true,
+  "fixed_effects": {
+    "C(perturbation_id)[T.10]": {
+      "coef": -0.07736133333333302,
+      "p_value": 0.030286653800989813
+    },
+    "C(perturbation_id)[T.11]": {
+      "coef": 0.04623577777777812,
+      "p_value": 0.19541559660946395
+    },
+    "C(perturbation_id)[T.12]": {
+      "coef": -0.013714444444444125,
+      "p_value": 0.7009483719716185
+    },
+    "C(perturbation_id)[T.13]": {
+      "coef": 0.06852377777777813,
+      "p_value": 0.05500378574634016
+    },
+    "C(perturbation_id)[T.14]": {
+      "coef": -0.11764355555555524,
+      "p_value": 0.000986567702602576
+    },
+    "C(perturbation_id)[T.15]": {
+      "coef": -0.10785588888888854,
+      "p_value": 0.0025256690057988544
+    },
+    "C(perturbation_id)[T.16]": {
+      "coef": 0.06986200000000033,
+      "p_value": 0.050427461531755646
+    },
+    "C(perturbation_id)[T.17]": {
+      "coef": 0.026754555555555903,
+      "p_value": 0.4537378461092627
+    },
+    "C(perturbation_id)[T.18]": {
+      "coef": 0.07229866666666701,
+      "p_value": 0.04291326857013011
+    },
+    "C(perturbation_id)[T.2]": {
+      "coef": 0.05649200000000032,
+      "p_value": 0.11366672905680211
+    },
+    "C(perturbation_id)[T.3]": {
+      "coef": 0.06692255555555589,
+      "p_value": 0.06092933908639623
+    },
+    "C(perturbation_id)[T.4]": {
+      "coef": 0.02735566666666699,
+      "p_value": 0.4436580105210559
+    },
+    "C(perturbation_id)[T.5]": {
+      "coef": -0.022166222222221896,
+      "p_value": 0.5347887214394255
+    },
+    "C(perturbation_id)[T.6]": {
+      "coef": -0.022798444444444146,
+      "p_value": 0.5232025848052281
+    },
+    "C(perturbation_id)[T.7]": {
+      "coef": -0.10855388888888856,
+      "p_value": 0.0023673930646481954
+    },
+    "C(perturbation_id)[T.8]": {
+      "coef": -0.14723522222222193,
+      "p_value": 3.740116855994213e-05
+    },
+    "C(perturbation_id)[T.9]": {
+      "coef": -0.2918228888888885,
+      "p_value": 3.037973012178321e-16
+    },
+    "Intercept": {
+      "coef": 0.920261222222223,
+      "p_value": 2.991898079978585e-213
+    }
+  },
+  "group_var_model_intercept": 0.0007026002631409,
+  "hypothesis": "H4_model_x_perturbation_interaction",
+  "log_likelihood": 145.42562145753794,
+  "metric": "linear_cka",
+  "models": [
+    "conch",
+    "gigapath_tile",
+    "uni"
+  ],
+  "n_observations": 162
+}

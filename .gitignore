@@ -27,6 +27,11 @@ downsampled/
 production_progress.csv
 *.checkpoint
 
+# Generated figures (regenerated on demand by scripts/04_reporting/14_make_figures.py;
+# scripts/04_reporting/data/ holds the checked-in Phase B statistical output that
+# generates them and is NOT ignored)
+scripts/04_reporting/figures/
+
 # OS / editor
 .DS_Store
 .ipynb_checkpoints/

@@ -1,0 +1,37 @@
+{
+  "anova_table": {
+    "C(cohort)": {
+      "F": 92.32793836455582,
+      "df": 1.0,
+      "p_value": 7.369666632227734e-22,
+      "sum_sq": 2.5878502581528746
+    },
+    "C(model)": {
+      "F": 19073.150929579188,
+      "df": 2.0,
+      "p_value": 0.0,
+      "sum_sq": 1069.1987589283954
+    },
+    "C(model):C(cohort)": {
+      "F": 1619.9752572390817,
+      "df": 2.0,
+      "p_value": 0.0,
+      "sum_sq": 90.81223867675594
+    },
+    "Residual": {
+      "F": null,
+      "df": 624342.0,
+      "p_value": null,
+      "sum_sq": 17499.617499267606
+    }
+  },
+  "hypothesis": "H3_model_x_demographic_interaction",
+  "interaction_significant": true,
+  "metric": "cosine_similarity",
+  "models": [
+    "conch",
+    "quilt_llava",
+    "uni"
+  ],
+  "n_observations": 624348
+}

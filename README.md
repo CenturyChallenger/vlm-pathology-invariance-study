@@ -72,7 +72,20 @@ before any production statistical run.
 
 | Order | Script | Purpose |
 |---|---|---|
-| 14 | `14_make_figures.py` | Generates all Phase B results figures used in the dissertation results chapter, for both Model Cohort Option A (UNI, CONCH, Quilt-LLaVA) and Option B (UNI, CONCH, Prov-GigaPath tile encoder), from the H1-H4 JSON summaries and H2/pairwise/outlier CSV tables produced by script 13. |
+| 14 | `14_make_figures.py` | Generates all 13 Phase B results figures used in the dissertation results chapter, for both Model Cohort Option A (UNI, CONCH, Quilt-LLaVA) and Option B (UNI, CONCH, Prov-GigaPath tile encoder), from the H1-H4 JSON summaries and H2/pairwise CSV tables produced by script 13. Each figure is written as both PNG and SVG; see `docs/figures.md` for the full figure list, the accessibility rationale behind the colour choices, and how the SVG output is embedded into the dissertation `.docx` files. |
+
+`scripts/04_reporting/data/` bundles the complete 22-file Phase B statistical
+output set (H1-H4, pairwise, and Option B's outlier-supplementary results, in
+both cosine-similarity and linear-CKA variants) actually used to produce the
+figures embedded in both dissertation drafts. These are aggregate statistical
+summaries only, not patient data, so the script runs correctly out of the box:
+
+```bash
+cd scripts/04_reporting
+python3 14_make_figures.py                    # both options, reads ./data, writes ./figures
+python3 14_make_figures.py --options b         # Option B only
+python3 14_make_figures.py --data-dir /path/to/new/phase_b/output --out-dir /path/to/figures
+```
 
 ## Model cohort configurations (Option A vs Option B)
 

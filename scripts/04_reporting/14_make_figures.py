@@ -9,7 +9,7 @@ H2/pairwise/outlier CSV tables).
 
 USAGE
 -----
-    python make_figures.py [--data-dir DATA_DIR] [--out-dir OUT_DIR]
+    python make_figures.py [--data-dir DATA_DIR] [--out-dir OUT_DIR] [--options {a,b,a,b}]
 
 By default, DATA_DIR is "./data" and OUT_DIR is "./figures", both
 resolved relative to this script's own location, so the package runs
@@ -37,15 +37,15 @@ here.
 
 OUTPUT
 ------
-13 PNG files written to OUT_DIR, matching the #FIGURE: references in
-dissertation.md / dissertation_optionB.md:
-    shared_fig_5_1_phase_a_throughput.png
-    option_{a,b}_fig_5_2_cosine_heatmap.png
-    option_{a,b}_fig_5_3_severity_trends.png
-    option_{a,b}_fig_5_4_demographic_gap_heatmap.png
-    option_{a,b}_fig_5_5_h4_perturbation_ranking.png
-    option_{a,b}_fig_5_6_h1_model_main_effect.png
-    option_{a,b}_fig_5_7_pairwise_comparison.png
+13 figures written to OUT_DIR, each as both PNG and SVG (26 files total),
+matching the #FIGURE: references in dissertation.md / dissertation_optionB.md:
+    shared_fig_5_1_phase_a_throughput.{png,svg}
+    option_{a,b}_fig_5_2_cosine_heatmap.{png,svg}
+    option_{a,b}_fig_5_3_severity_trends.{png,svg}
+    option_{a,b}_fig_5_4_demographic_gap_heatmap.{png,svg}
+    option_{a,b}_fig_5_5_h4_perturbation_ranking.{png,svg}
+    option_{a,b}_fig_5_6_h1_model_main_effect.{png,svg}
+    option_{a,b}_fig_5_7_pairwise_comparison.{png,svg}
 
 DEPENDENCIES
 ------------
@@ -66,7 +66,7 @@ import matplotlib.patches as mpatches
 from matplotlib.colors import TwoSlopeNorm
 
 # DATA and OUT are resolved in main() from CLI args (or their defaults,
-# both relative to this script's location) and then used as module-level
+# both relative to this script's own location) and then used as module-level
 # globals by every fig_* function below via f-string interpolation.
 SCRIPT_DIR = Path(__file__).resolve().parent
 DATA = str(SCRIPT_DIR / "data")
@@ -172,6 +172,19 @@ def pert_label(pid):
     return f"{pid:02d}. {PERT_NAMES[pid]}"
 
 
+def save_both_formats(fig, path_no_ext):
+    """
+    Save a figure as both PNG (raster, used as the Word-compatibility
+    fallback for older/non-Office viewers, and for quick preview) and SVG
+    (vector, scales losslessly to any zoom level or print size). Both use
+    the same rcParams (dpi, bbox_inches) already set at module load, so
+    this only needs to be called once per figure rather than duplicating
+    savefig() calls throughout the file.
+    """
+    fig.savefig(f"{path_no_ext}.png")
+    fig.savefig(f"{path_no_ext}.svg")
+
+
 def text_color_for(cmap, norm, value):
     """
     Return 'white' or 'black' for annotation text drawn on top of a heatmap
@@ -185,7 +198,6 @@ def text_color_for(cmap, norm, value):
     r, g, b, _ = cmap(norm(value))
     luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b  # matplotlib returns 0-1 floats
     return "white" if luminance < 0.5 else "black"
-
 
 
 # =======================================================================
@@ -209,7 +221,7 @@ def fig_phase_a_throughput():
     ax.spines[["top", "right"]].set_visible(False)
     ax.grid(axis="y", alpha=0.3, linestyle="--")
     fig.tight_layout()
-    fig.savefig(f"{OUT}/shared_fig_5_1_phase_a_throughput.png")
+    save_both_formats(fig, f"{OUT}/shared_fig_5_1_phase_a_throughput")
     plt.close(fig)
 
 
@@ -259,7 +271,7 @@ def fig_cosine_heatmap(option, models_order):
         + ("(Option A)" if option == "a" else "(Option B)"),
         fontsize=11, fontweight="bold", y=0.995,
     )
-    fig.savefig(f"{OUT}/option_{option}_fig_5_2_cosine_heatmap.png")
+    save_both_formats(fig, f"{OUT}/option_{option}_fig_5_2_cosine_heatmap")
     plt.close(fig)
 
 
@@ -297,7 +309,7 @@ def fig_severity_trends(option, models_order):
         fontsize=11, fontweight="bold",
     )
     fig.tight_layout(rect=[0, 0.05, 1, 0.94])
-    fig.savefig(f"{OUT}/option_{option}_fig_5_3_severity_trends.png")
+    save_both_formats(fig, f"{OUT}/option_{option}_fig_5_3_severity_trends")
     plt.close(fig)
 
 
@@ -351,7 +363,7 @@ def fig_demographic_gap_heatmap(option, models_order):
         fontsize=10,
     )
     fig.tight_layout()
-    fig.savefig(f"{OUT}/option_{option}_fig_5_4_demographic_gap_heatmap.png")
+    save_both_formats(fig, f"{OUT}/option_{option}_fig_5_4_demographic_gap_heatmap")
     plt.close(fig)
 
 
@@ -403,7 +415,7 @@ def fig_h4_perturbation_ranking(option):
     ax.spines[["top", "right"]].set_visible(False)
     ax.grid(axis="x", alpha=0.3, linestyle="--")
     fig.tight_layout()
-    fig.savefig(f"{OUT}/option_{option}_fig_5_5_h4_perturbation_ranking.png")
+    save_both_formats(fig, f"{OUT}/option_{option}_fig_5_5_h4_perturbation_ranking")
     plt.close(fig)
 
 
@@ -441,7 +453,7 @@ def fig_h1_model_main_effect(option, models_order):
         fontsize=11, fontweight="bold",
     )
     fig.tight_layout(rect=[0, 0, 1, 0.93])
-    fig.savefig(f"{OUT}/option_{option}_fig_5_6_h1_model_main_effect.png")
+    save_both_formats(fig, f"{OUT}/option_{option}_fig_5_6_h1_model_main_effect")
     plt.close(fig)
 
 
@@ -475,7 +487,7 @@ def fig_pairwise_comparison(option, model_pairs):
     ax.spines[["top", "right"]].set_visible(False)
     ax.grid(axis="y", alpha=0.3, linestyle="--")
     fig.tight_layout()
-    fig.savefig(f"{OUT}/option_{option}_fig_5_7_pairwise_comparison.png")
+    save_both_formats(fig, f"{OUT}/option_{option}_fig_5_7_pairwise_comparison")
     plt.close(fig)
 
 
@@ -496,7 +508,7 @@ def main():
     )
     parser.add_argument(
         "--out-dir", default=OUT,
-        help=f"Directory to write generated PNG figures to (default: {OUT})",
+        help=f"Directory to write generated PNG/SVG figures to (default: {OUT})",
     )
     parser.add_argument(
         "--options", default="a,b", choices=["a", "b", "a,b"],

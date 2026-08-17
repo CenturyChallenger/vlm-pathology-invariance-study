@@ -1,0 +1,24 @@
+{
+  "group_means": {
+    "conch": 0.8619642962962962,
+    "gigapath_tile": 0.9031802407407407,
+    "uni": 0.9165213148148149
+  },
+  "group_sizes": {
+    "conch": 54,
+    "gigapath_tile": 54,
+    "uni": 54
+  },
+  "hypothesis": "H1_model_main_effect",
+  "metric": "linear_cka",
+  "models": [
+    "conch",
+    "gigapath_tile",
+    "uni"
+  ],
+  "omnibus_test": "kruskal_wallis",
+  "p_value": 0.08597156744930427,
+  "posthoc": {},
+  "significant_at_alpha": false,
+  "statistic": 4.9074772968942275
+}

@@ -22,6 +22,11 @@ embeddings/
 perturbed_tiles/
 downsampled/
 
+# Matching manifests -- link pseudonymised ACC case IDs to demographic fields
+# (sex, age, diagnosis class); covered by the ACC NDA/MTA/DUA, not for the repo.
+matched_controls_manifest*.tsv
+acc_manifest*.tsv
+
 # Logs and checkpoints
 *.log
 production_progress.csv

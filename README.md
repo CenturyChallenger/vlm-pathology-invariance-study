@@ -40,20 +40,36 @@ scripts/
 
 | Order | Script | Purpose |
 |---|---|---|
-| 1 | `01_gdc_match_manifest.py` | Phase 1 of the two-phase download pipeline. Queries the GDC API to build a manifest of TCGA/HCMI control cases demographically matched to the ACC cohort, resolving programme-specific Google Cloud Storage buckets (`gdc-tcga-phs000178-open`, `gdc-hcmi-open`) for later download. |
-| 2 | `02_slide_download_generator_v5.py` | Downloads matched non-African control diagnostic WSIs from GDC/TCGA, with TCIA fallback (slide/histology modality only) and AWS Open Data as a last resort. v5 adds resumable downloads that are safe to interrupt and restart. |
-| 3 | `03_gcs_slide_downloader.py` | Phase 2 of the two-phase download pipeline. Downloads the GDC/TCGA-HCMI slides identified in the manifest directly from the resolved Google Cloud Storage buckets over HTTPS. |
-| 4 | `04_gdrive_wsi_downloader.py` | Downloads the Aroha Cancer Centre whole-slide images (SVS, NDPI, MRXS, TIFF) from a shared Google Drive folder, with a CSV manifest updated after every download attempt so progress survives interruptions. |
-| 5 | `05_wsi_audit.py` | Audits native scan resolution and magnification metadata across both cohorts prior to tile extraction, using one shared OpenSlide-based inspection routine with cohort-specific path resolvers. |
-| 6 | `06_downsample_wsi.py` | Reads each WSI at the pyramid level nearest to 20x / 0.5 microns-per-pixel (the pretraining resolution for UNI, CONCH, and Prov-GigaPath), resizes where no native level is close enough, and writes a standardised tiled TIFF per slide across both cohorts. |
+| 1 | `01_gdc_match_manifest_v4.py` | Phase 1 of the two-phase download pipeline. Queries the GDC API to build a manifest of TCGA/HCMI control cases demographically matched to the ACC cohort. v4 resolves each file's GCS bucket via the NCI CRDC DRS API (programme-agnostic, correct for TCGA and HCMI alike in principle), falling back to the TCGA open bucket if DRS is unreachable, and adds cross-case file_id deduplication (each control file can be assigned to at most one ACC case; a case whose entire 50-candidate pool is already used triggers an automatic retry against a 200-candidate pool). See "Known gap" below: DRS is documented elsewhere in this project as unreachable from the University of Sussex HCI compute nodes, so this script's DRS-dependent path has not been confirmed to run cleanly end-to-end from that environment. |
+| 2 | `02_test_matched_controls_patched.py` | Ad hoc verification script (not a formal pytest suite) run against `matched_controls_manifest_patched.tsv` after that manifest has been corrected: confirms zero duplicate `file_id` values among MATCHED rows, and confirms every HCM-prefixed file's `gcs_url` points at the `gdc-hcmi-open` bucket rather than the TCGA bucket. See "Known gap" below. |
+| 3 | `03_slide_download_generator_v5.py` | Downloads matched non-African control diagnostic WSIs from GDC/TCGA, with TCIA fallback (slide/histology modality only) and AWS Open Data as a last resort. v5 adds resumable downloads that are safe to interrupt and restart. |
+| 4 | `04_gcs_slide_downloader_v2.py` | Phase 2 of the two-phase download pipeline. Downloads the GDC/TCGA-HCMI slides identified in the (patched) manifest directly from the resolved Google Cloud Storage buckets over HTTPS. v2 hardens the MATCHED-row filter: the `status` column is normalised (stripped, upper-cased) before filtering, and rows are additionally required to have a non-null `gcs_url` starting with `https://`, guarding against blank/NaN URLs on rows that pandas would otherwise silently pass through. |
+| 5 | `05_gdrive_wsi_downloader.py` | Downloads the Aroha Cancer Centre whole-slide images (SVS, NDPI, MRXS, TIFF) from a shared Google Drive folder, with a CSV manifest updated after every download attempt so progress survives interruptions. |
+| 6 | `06_wsi_audit.py` | Audits native scan resolution and magnification metadata across both cohorts prior to tile extraction, using one shared OpenSlide-based inspection routine with cohort-specific path resolvers. |
+| 7 | `07_downsample_wsi.py` | Reads each WSI at the pyramid level nearest to 20x / 0.5 microns-per-pixel (the pretraining resolution for UNI, CONCH, and Prov-GigaPath), resizes where no native level is close enough, and writes a standardised tiled TIFF per slide across both cohorts. |
+
+**Known gap (documented honestly, not hidden):** this project's own reproducibility
+notes (`docs/environment_notes.md`) record that the NCI CRDC DRS endpoint
+(`nci-crdc.datacommons.io`) is blocked from Sussex HCI compute nodes, and that the
+practical fix used in production was a programme-aware bucket resolver bypassing DRS
+entirely (`TCGA-*` -> `gdc-tcga-phs000178-open`, `HCM-*` -> `gdc-hcmi-open`). Script 1
+as currently checked in relies on a live DRS call for its primary resolution path, with
+a single-bucket (TCGA-only) fallback if DRS fails -- it does not yet contain the
+programme-aware fallback. `matched_controls_manifest_patched.tsv` (not included in this
+repository; see "Data and compute environment" below) has been confirmed, via script 2,
+to already have correct per-programme bucket URLs, but no script or log in this project
+currently evidences how that manifest was patched into that corrected state. This is
+recorded as an open item pending a source script or log for the correction step, rather
+than assumed or reconstructed. If you have that script, it belongs at this position in
+the pipeline, between scripts 1 and 2.
 
 ### Phase A -- Perturbation generation and embedding extraction
 
 | Order | Script | Purpose |
 |---|---|---|
-| 7 | `07_perturbation_pipeline.py` | Implements all 18 clinically motivated perturbations defined in Section 5.4 of the dissertation proposal, at three severities, applied to every tile in both cohorts. |
-| 8 | `08_preflight_check.py` | Pre-flight validation for embedding extraction, run once per model conda environment immediately before submitting a Slurm GPU job. Checks the active conda environment, model-specific package availability, Hugging Face gated-access tokens (UNI, CONCH), GPU visibility, perturbation tile corpus completeness, and the target embeddings directory, entirely without touching the GPU or the network. |
-| 9 | `09_extract_embeddings_similarity.py` | Phase A: extracts embeddings for every baseline and perturbed tile across all study models, with resilient HDF5-backed caching that supports interrupted/resumed runs. Phase B (of this script): computes cosine similarity per tile and linear CKA per perturbation/severity/model from the cached embeddings, entirely on CPU. |
+| 8 | `08_perturbation_pipeline.py` | Implements all 18 clinically motivated perturbations defined in Section 5.4 of the dissertation proposal, at three severities, applied to every tile in both cohorts. |
+| 9 | `09_preflight_check.py` | Pre-flight validation for embedding extraction, run once per model conda environment immediately before submitting a Slurm GPU job. Checks the active conda environment, model-specific package availability, Hugging Face gated-access tokens (UNI, CONCH), GPU visibility, perturbation tile corpus completeness, and the target embeddings directory, entirely without touching the GPU or the network. |
+| 10 | `10_extract_embeddings_similarity.py` | Phase A: extracts embeddings for every baseline and perturbed tile across all study models, with resilient HDF5-backed caching that supports interrupted/resumed runs. Phase B (of this script): computes cosine similarity per tile and linear CKA per perturbation/severity/model from the cached embeddings, entirely on CPU. |
 
 ### Phase B -- Statistical analysis (H1-H4)
 
@@ -63,16 +79,16 @@ before any production statistical run.
 
 | Order | Script | Purpose |
 |---|---|---|
-| 10 | `10_make_synthetic_data.py` | Generates small synthetic `cosine_similarity.csv` / `cka_summary.csv` files matching the exact schema produced by `extract_embeddings_similarity.py`'s `run_similarity()`, for smoke-testing the statistical analysis script without needing real embeddings. |
-| 11 | `11_validate_phase_b_statistical_analysis.py` | Self-contained validation script reproducing every check performed while diagnosing and fixing a zero-variance edge case in `two_sample_test()` (perturbations 3, 17, and 18 at moderate severity are documented identity transforms, yielding a constant cosine similarity of 1.0 in both cohorts, which is mathematically undefined for Shapiro-Wilk / Mann-Whitney U). Confirms the fix on synthetic data before it is trusted on real data. |
-| 12 | `12_check_phase_b_dependencies.py` | Verifies the statistical analysis environment (numpy, pandas, scipy, statsmodels, optional scikit-posthocs) has every required package at a known, unmodified version before a long batch run is submitted, using a pip constraints file so no already-installed package is silently upgraded or downgraded. |
-| 13 | `13_phase_b_statistical_analysis.py` | Runs the H1-H4 hypothesis tests (model main effect, demographic main effect, model x demographic interaction, model x perturbation interaction) over the real cosine-similarity and linear-CKA metrics, per Section 5.6 of the dissertation proposal (v4, 23 Jul 2026), for both candidate model-cohort configurations (Option A and Option B; see "Model cohort configurations" below). |
+| 11 | `11_make_synthetic_data.py` | Generates small synthetic `cosine_similarity.csv` / `cka_summary.csv` files matching the exact schema produced by `extract_embeddings_similarity.py`'s `run_similarity()`, for smoke-testing the statistical analysis script without needing real embeddings. |
+| 12 | `12_validate_phase_b_statistical_analysis.py` | Self-contained validation script reproducing every check performed while diagnosing and fixing a zero-variance edge case in `two_sample_test()` (perturbations 3, 17, and 18 at moderate severity are documented identity transforms, yielding a constant cosine similarity of 1.0 in both cohorts, which is mathematically undefined for Shapiro-Wilk / Mann-Whitney U). Confirms the fix on synthetic data before it is trusted on real data. |
+| 13 | `13_check_phase_b_dependencies.py` | Verifies the statistical analysis environment (numpy, pandas, scipy, statsmodels, optional scikit-posthocs) has every required package at a known, unmodified version before a long batch run is submitted, using a pip constraints file so no already-installed package is silently upgraded or downgraded. |
+| 14 | `14_phase_b_statistical_analysis.py` | Runs the H1-H4 hypothesis tests (model main effect, demographic main effect, model x demographic interaction, model x perturbation interaction) over the real cosine-similarity and linear-CKA metrics, per Section 5.6 of the dissertation proposal (v4, 23 Jul 2026), for both candidate model-cohort configurations (Option A and Option B; see "Model cohort configurations" below). |
 
 ### Phase C -- Reporting
 
 | Order | Script | Purpose |
 |---|---|---|
-| 14 | `14_make_figures.py` | Generates all 13 Phase B results figures used in the dissertation results chapter, for both Model Cohort Option A (UNI, CONCH, Quilt-LLaVA) and Option B (UNI, CONCH, Prov-GigaPath tile encoder), from the H1-H4 JSON summaries and H2/pairwise CSV tables produced by script 13. Each figure is written as both PNG and SVG; see `docs/figures.md` for the full figure list, the accessibility rationale behind the colour choices, and how the SVG output is embedded into the dissertation `.docx` files. |
+| 15 | `15_make_figures.py` | Generates all 13 Phase B results figures used in the dissertation results chapter, for both Model Cohort Option A (UNI, CONCH, Quilt-LLaVA) and Option B (UNI, CONCH, Prov-GigaPath tile encoder), from the H1-H4 JSON summaries and H2/pairwise CSV tables produced by script 14. Each figure is written as both PNG and SVG; see `docs/figures.md` for the full figure list, the accessibility rationale behind the colour choices, and how the SVG output is embedded into the dissertation `.docx` files. |
 
 `scripts/04_reporting/data/` bundles the complete 22-file Phase B statistical
 output set (H1-H4, pairwise, and Option B's outlier-supplementary results, in
@@ -82,9 +98,9 @@ summaries only, not patient data, so the script runs correctly out of the box:
 
 ```bash
 cd scripts/04_reporting
-python3 14_make_figures.py                    # both options, reads ./data, writes ./figures
-python3 14_make_figures.py --options b         # Option B only
-python3 14_make_figures.py --data-dir /path/to/new/phase_b/output --out-dir /path/to/figures
+python3 15_make_figures.py                    # both options, reads ./data, writes ./figures
+python3 15_make_figures.py --options b         # Option B only
+python3 15_make_figures.py --data-dir /path/to/new/phase_b/output --out-dir /path/to/figures
 ```
 
 ## Model cohort configurations (Option A vs Option B)
@@ -101,7 +117,7 @@ preserving the same 3-pairwise x 18-perturbation Bonferroni-corrected structure
   `openai/clip-vit-large-patch14-336`, which upsamples every 224x224 study tile to
   336x336 before inference).
 
-`13_phase_b_statistical_analysis.py` and `14_make_figures.py` both run either
+`14_phase_b_statistical_analysis.py` and `15_make_figures.py` both run either
 configuration from a single `MODEL_SETS` dictionary, so the choice between Option A and
 Option B does not require code changes. This decision is pending discussion with the
 supervisor and is documented here for transparency; it does not block analysis under
@@ -109,7 +125,7 @@ either configuration.
 
 ## Requirements
 
-See `requirements.txt`. The extraction stage (script 9) additionally requires
+See `requirements.txt`. The extraction stage (script 10) additionally requires
 model-specific packages and gated Hugging Face access, isolated into separate conda
 environments per model (`uni-env`, `conch-env`, `quilt-llava-env`); see
 `docs/environment_notes.md`.
@@ -125,6 +141,11 @@ environments per model (`uni-env`, `conch-env`, `quilt-llava-env`); see
   redistributed here. File paths referenced in these scripts (for example,
   `/its/home/pn254/project2026/...`) are specific to the author's Artemis account and
   will need to be changed for any other environment.
+- `matched_controls_manifest*.tsv` and `acc_manifest*.tsv` (the Phase 1 matching
+  manifests consumed by scripts 1-4) are also excluded (`.gitignore`): they link
+  pseudonymised ACC case IDs to demographic fields (sex, age, diagnosis class), which
+  falls under the same ACC data-sharing agreements as the imagery itself, even though
+  the manifest contains no image data.
 - No API keys, tokens, or credentials are stored in this repository. All scripts read
   credentials from environment variables (for example, `HUGGING_FACE_HUB_TOKEN`,
   `HF_TOKEN`, `GDRIVE_API_KEY`, `TCIA_API_KEY`).

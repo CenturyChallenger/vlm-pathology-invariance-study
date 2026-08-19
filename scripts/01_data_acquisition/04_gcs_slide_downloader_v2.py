@@ -308,9 +308,18 @@ def run_downloads(
     """
     manifest = pd.read_csv(manifest_path, sep="\t")
 
-    # Filter to MATCHED rows only
-    to_download = manifest[manifest["status"] == "MATCHED"].copy()
-    no_match    = manifest[manifest["status"] == "NO_MATCH"]
+    # Normalise the status column defensively -- strip whitespace, uppercase,
+    # to guard against any trailing spaces or case differences written by Phase 1.
+    manifest["status"] = manifest["status"].astype(str).str.strip().str.upper()
+
+    # Filter to MATCHED rows only; guard against null/nan gcs_url values
+    # (NO_MATCH rows have empty gcs_url which pandas reads back as float NaN)
+    to_download = manifest[
+        (manifest["status"] == "MATCHED") &
+        (manifest["gcs_url"].notna()) &
+        (manifest["gcs_url"].astype(str).str.startswith("https://"))
+    ].copy()
+    no_match = manifest[manifest["status"] == "NO_MATCH"]
 
     logger.info(
         f"Manifest: {len(manifest)} total cases  |  "

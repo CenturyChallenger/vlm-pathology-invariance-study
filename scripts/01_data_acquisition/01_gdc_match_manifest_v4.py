@@ -58,9 +58,8 @@ from tqdm import tqdm
 GDC_BASE           = "https://api.gdc.cancer.gov"
 GDC_FILES_ENDPOINT = f"{GDC_BASE}/files"
 
-# GCS open-access bucket -- no credentials required
-# Maintained by ISB-CGC (NCI Cancer Gateway in the Cloud)
-# Reference: https://isb-cancer-genomics-cloud.readthedocs.io/en/latest/sections/data/TCGA-images.html
+# GCS open-access bucket for TCGA slides (used as fallback if DRS is unreachable)
+# The authoritative URL for any file is now resolved via the DRS API (see resolve_gcs_url)
 GCS_BUCKET_BASE = "https://storage.googleapis.com/gdc-tcga-phs000178-open"
 
 logging.basicConfig(
@@ -385,16 +384,63 @@ def select_best(acc_age, acc_diag_class, candidates) -> Optional[Dict]:
 
 
 # ---------------------------------------------------------------------------
-# GCS URL constructor
+# GCS URL resolution via GDC DRS (Data Repository Service) API
 # ---------------------------------------------------------------------------
 
-def gcs_url(file_id: str, file_name: str) -> str:
+# The NCI CRDC DRS endpoint resolves any GDC file UUID to its correct
+# GCS and AWS bucket URLs -- regardless of programme (TCGA, HCMI, etc.).
+# This is the authoritative, programme-agnostic method to get the GCS path.
+# Reference: https://learn.canceridc.dev/data/organization-of-data/guids-and-uuids
+#
+# The previous approach of hardcoding "gdc-tcga-phs000178-open/<uuid>/<filename>"
+# caused 100% failure in Phase 2 because:
+#   - HCM-EXPT / HCM-CSHL files live in a DIFFERENT GCS bucket (not phs000178)
+#   - Some TCGA file UUIDs were remapped when GDC migrated from legacy archive
+#
+# The DRS API returns the correct bucket URL for ALL programmes in one call.
+
+DRS_BASE = "https://nci-crdc.datacommons.io/ga4gh/drs/v1/objects"
+
+
+def resolve_gcs_url(file_id: str, file_name: str) -> str:
     """
-    Build the public HTTPS URL for an SVS file in the ISB-CGC open bucket.
-    No credentials required -- the bucket has allUsers read access.
-    URL format: https://storage.googleapis.com/gdc-tcga-phs000178-open/<uuid>/<filename>
+    Resolve a GDC file UUID to its public GCS HTTPS download URL via the
+    NCI CRDC DRS (Data Repository Service) API.
+
+    Returns the first GCS access_method URL found, or falls back to the
+    legacy TCGA open bucket URL if DRS is unreachable (for resilience).
+
+    DRS response structure:
+      {
+        "access_methods": [
+          {"type": "gs",  "access_url": {"url": "gs://gdc-<programme>-open/<uuid>/<name>"}},
+          {"type": "s3",  "access_url": {"url": "s3://gdc-aws-.../<uuid>/<name>"}}
+        ]
+      }
+
+    We convert the gs:// URL to an https://storage.googleapis.com/... URL
+    which can be downloaded by plain requests.get() without any SDK.
     """
-    return f"{GCS_BUCKET_BASE}/{file_id}/{file_name}"
+    url = f"{DRS_BASE}/dg.4DFC%2F{file_id}"
+    r   = retry_get(url, timeout=15, max_retries=3)
+
+    if r is not None:
+        try:
+            methods = r.json().get("access_methods", [])
+            for m in methods:
+                gs_url = m.get("access_url", {}).get("url", "")
+                if gs_url.startswith("gs://"):
+                    # Convert  gs://bucket/path  ->  https://storage.googleapis.com/bucket/path
+                    return "https://storage.googleapis.com/" + gs_url[5:]
+        except Exception as e:
+            logger.warning(f"[DRS] Could not parse DRS response for {file_id}: {e}")
+
+    # Fallback: use the TCGA open bucket (correct for TCGA files even if DRS fails)
+    logger.warning(
+        f"[DRS] Could not resolve GCS URL for {file_id} via DRS -- "
+        f"falling back to gdc-tcga-phs000178-open (may 404 for non-TCGA files)."
+    )
+    return f"https://storage.googleapis.com/gdc-tcga-phs000178-open/{file_id}/{file_name}"
 
 
 # ---------------------------------------------------------------------------
@@ -412,19 +458,31 @@ def generate_manifest(
     For each ACC case in the manifest, query GDC for the best-matching
     control slide and write the result (including GCS URL) to out_path.
 
-    Cases already present in an existing output file are skipped, making
-    this function safe to re-run after an interruption.
+    v3 changes:
+      - GCS URL now resolved via DRS API (correct bucket for ALL programmes).
+      - Deduplication: each file_id is assigned to at most ONE ACC case.
+        A set of used_file_ids grows as matches are made; candidates already
+        assigned are excluded from scoring for subsequent cases.
+      - Cases already present in the output file are skipped (resume).
     """
     manifest = pd.read_csv(manifest_path, sep="\t")
     logger.info(f"Loaded {len(manifest)} ACC cases from {manifest_path}")
 
     # Resume: skip cases already written to the output file
     already_matched: set = set()
+    used_file_ids: set   = set()
+
     if out_path.exists():
         try:
             prior = pd.read_csv(out_path, sep="\t")
+            # Only MATCHED rows consume a file_id slot
+            matched_prior = prior[prior["status"].str.strip().str.upper() == "MATCHED"]
             already_matched = set(prior["acc_case_id"].tolist())
-            logger.info(f"[RESUME] {len(already_matched)} cases already in {out_path} -- will skip.")
+            used_file_ids   = set(matched_prior["file_id"].dropna().tolist())
+            logger.info(
+                f"[RESUME] {len(already_matched)} cases already in {out_path} -- will skip. "
+                f"({len(used_file_ids)} file_ids already consumed)"
+            )
         except Exception as e:
             logger.warning(f"Could not read existing output: {e} -- starting fresh.")
 
@@ -461,7 +519,22 @@ def generate_manifest(
             acc_case_id, acc_sex, acc_age, acc_diag_cls,
             per_case_candidates, age_window,
         )
-        best = select_best(acc_age, acc_diag_cls, candidates)
+
+        # Deduplication: exclude file_ids already assigned to a prior ACC case
+        fresh_candidates = [c for c in candidates if c.get("file_id") not in used_file_ids]
+        if not fresh_candidates and candidates:
+            logger.warning(
+                f"[DEDUP] {acc_case_id}: all {len(candidates)} candidates already used "
+                f"-- expanding to 200 candidates for a fresh match."
+            )
+            # Retry with a much larger candidate pool to find an unused slide
+            candidates_large, tier = query_tiered(
+                acc_case_id, acc_sex, acc_age, acc_diag_cls,
+                200, age_window,
+            )
+            fresh_candidates = [c for c in candidates_large if c.get("file_id") not in used_file_ids]
+
+        best = select_best(acc_age, acc_diag_cls, fresh_candidates)
 
         if best:
             file_id   = best["file_id"]
@@ -474,12 +547,16 @@ def generate_manifest(
             ctrl_race = demo.get("race", "")
             age_delta = abs(acc_age - hit_age) if acc_age and hit_age else ""
 
+            # Resolve the correct GCS URL for this file via DRS
+            resolved_url = resolve_gcs_url(file_id, file_name)
+            used_file_ids.add(file_id)
+
             row_values = [
                 acc_case_id, acc_sex, acc_age, acc_diag_cls,
                 tier, file_id, file_name,
                 ctrl_id, ctrl_race,
                 hit_age, age_delta, hit_cls,
-                gcs_url(file_id, file_name), "MATCHED",
+                resolved_url, "MATCHED",
             ]
             matched += 1
         else:
@@ -492,7 +569,7 @@ def generate_manifest(
             no_match += 1
 
         out_fh.write("\t".join(str(v) for v in row_values) + "\n")
-        out_fh.flush()   # ensure each row survives an HCI session drop
+        out_fh.flush()
         time.sleep(sleep_sec)
 
     out_fh.close()

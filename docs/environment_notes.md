@@ -91,8 +91,8 @@ delete the affected file before resubmitting.
 ## GDC data access
 
 The NCI CRDC DRS endpoint (`nci-crdc.datacommons.io`) is blocked from Sussex
-HCI compute nodes. `01_gdc_match_manifest.py` resolves the programme-specific
-GDC open-access Google Cloud Storage bucket instead:
+HCI compute nodes. The programme-specific GDC open-access Google Cloud
+Storage bucket is the resolution method confirmed to work in production:
 
 | Programme prefix | GCS bucket |
 |---|---|
@@ -103,6 +103,21 @@ GDC open-access Google Cloud Storage bucket instead:
 | `CGCI-*` | `gdc-cgci-phs000235-open` |
 
 Files are addressed as `https://storage.googleapis.com/<bucket>/<uuid>/<filename>`.
+
+**Discrepancy, documented rather than silently resolved:** the version of
+`01_gdc_match_manifest_v4.py` currently in this repository resolves each
+file's bucket via a live call to the DRS endpoint above, with a fallback to
+the TCGA bucket only (not programme-aware) if that call fails -- it does not
+implement the bucket-table approach shown above. Given DRS is unreachable
+from Sussex HCI nodes, this script's primary resolution path has not been
+confirmed to succeed end-to-end from that environment. Separately,
+`matched_controls_manifest_patched.tsv` (excluded from this repository; see
+main README) has been verified, via `02_test_matched_controls_patched.py`,
+to already contain correct per-programme bucket URLs for every HCM-prefixed
+file. No script or log currently in this project evidences how that file was
+produced from the unpatched manifest -- it is treated as an open item, not
+assumed to have been done via the bucket table above, since that would be
+asserting a mechanism without evidence.
 
 The GDC API's `not_in` race filter on nested demographic fields silently
 drops records whose parent entity is null; race exclusion is applied in

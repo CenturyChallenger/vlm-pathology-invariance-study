@@ -48,20 +48,28 @@ scripts/
 | 6 | `06_wsi_audit.py` | Audits native scan resolution and magnification metadata across both cohorts prior to tile extraction, using one shared OpenSlide-based inspection routine with cohort-specific path resolvers. |
 | 7 | `07_downsample_wsi.py` | Reads each WSI at the pyramid level nearest to 20x / 0.5 microns-per-pixel (the pretraining resolution for UNI, CONCH, and Prov-GigaPath), resizes where no native level is close enough, and writes a standardised tiled TIFF per slide across both cohorts. |
 
-**Known gap (documented honestly, not hidden):** this project's own reproducibility
-notes (`docs/environment_notes.md`) record that the NCI CRDC DRS endpoint
-(`nci-crdc.datacommons.io`) is blocked from Sussex HCI compute nodes, and that the
-practical fix used in production was a programme-aware bucket resolver bypassing DRS
-entirely (`TCGA-*` -> `gdc-tcga-phs000178-open`, `HCM-*` -> `gdc-hcmi-open`). Script 1
-as currently checked in relies on a live DRS call for its primary resolution path, with
-a single-bucket (TCGA-only) fallback if DRS fails -- it does not yet contain the
-programme-aware fallback. `matched_controls_manifest_patched.tsv` (not included in this
-repository; see "Data and compute environment" below) has been confirmed, via script 2,
-to already have correct per-programme bucket URLs, but no script or log in this project
-currently evidences how that manifest was patched into that corrected state. This is
-recorded as an open item pending a source script or log for the correction step, rather
-than assumed or reconstructed. If you have that script, it belongs at this position in
-the pipeline, between scripts 1 and 2.
+**Known gap (documented honestly, not hidden):** direct comparison of the real,
+unpatched `matched_controls_manifest.tsv` against `matched_controls_manifest_patched.tsv`
+confirms that DRS resolution (`resolve_gcs_url()` in script 1) genuinely failed for all
+15 HCMI-programme files in a real run -- the unpatched manifest shows the incorrect
+`gdc-tcga-phs000178-open` bucket for all 15, exactly matching script 1's coded fallback
+path, while the patched manifest shows all 15 correctly resolved to `gdc-hcmi-open`.
+The *cause* of that DRS failure is not established: it may be network-level restriction
+in the environment DRS was called from, or it may be the NCI CRDC/Imaging Data Commons
+User Guide's documented behaviour that a GUID not yet registered with the DRS resolution
+service legitimately returns HTTP 404 (National Cancer Institute, Imaging Data Commons,
+n.d., "Resolving CRDC Globally Unique Identifiers (GUIDs)"). Script 1's `retry_get()`
+treats non-200 responses and connection-level exceptions identically in its logging, so
+the manifest and logs alone cannot distinguish these two causes. Separately, no script
+or log in this project currently evidences the *mechanism* by which the manifest was
+corrected into its patched state -- that remains a genuinely open item, not assumed or
+reconstructed here. If you have the correction script or the DRS request logs, they
+would resolve both open points; the correction step belongs at this position in the
+pipeline, between scripts 1 and 2. A programme-aware bucket-table resolver
+(`TCGA-*` -> `gdc-tcga-phs000178-open`, `HCM-*` -> `gdc-hcmi-open`, bypassing DRS
+entirely) remains available as a simpler fix regardless of which cause turns out to be
+correct, since it does not depend on knowing why DRS failed; script 1 as currently
+checked in does not implement this bypass.
 
 ### Phase A -- Perturbation generation and embedding extraction
 

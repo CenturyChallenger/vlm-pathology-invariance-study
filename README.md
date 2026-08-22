@@ -98,11 +98,17 @@ before any production statistical run.
 |---|---|---|
 | 15 | `15_make_figures.py` | Generates all 13 Phase B results figures used in the dissertation results chapter, for both Model Cohort Option A (UNI, CONCH, Quilt-LLaVA) and Option B (UNI, CONCH, Prov-GigaPath tile encoder), from the H1-H4 JSON summaries and H2/pairwise CSV tables produced by script 14. Each figure is written as both PNG and SVG; see `docs/figures.md` for the full figure list, the accessibility rationale behind the colour choices, and how the SVG output is embedded into the dissertation `.docx` files. |
 
-`scripts/04_reporting/data/` bundles the complete 22-file Phase B statistical
-output set (H1-H4, pairwise, and Option B's outlier-supplementary results, in
-both cosine-similarity and linear-CKA variants) actually used to produce the
-figures embedded in both dissertation drafts. These are aggregate statistical
-summaries only, not patient data, so the script runs correctly out of the box:
+`scripts/04_reporting/data/` bundles the complete real Phase B statistical
+output set (23 files: H1-H4, pairwise, and Option B's outlier-supplementary
+results in both cosine-similarity and linear-CKA variants, plus a per-model
+H4 breakdown) actually used to produce the figures embedded in both
+dissertation drafts. These are aggregate statistical summaries only, not
+patient data, so the script runs correctly out of the box. Note that
+`15_make_figures.py` reads only 10 of these 23 files; see `docs/figures.md`
+for exactly which, and for the honestly-documented gap around
+`option_b_h4_per_model.csv` (source data for two dissertation figures --
+5.2b, 5.5b -- that were produced ad hoc and are not backed by a script
+currently held in this project):
 
 ```bash
 cd scripts/04_reporting

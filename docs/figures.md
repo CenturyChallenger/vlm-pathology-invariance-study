@@ -28,17 +28,33 @@ incorrect figure.
 
 ## Input files
 
-Of the full Phase B output set (22 files: 11 per option, produced by script
-13), only these 10 (5 per option) are read:
+Of the full Phase B output set (now 23 files, following the addition of
+`option_b_h4_per_model.csv` -- see "Per-model H4 breakdown" below), only these
+10 (5 per option) are read:
 
 - `option_{a,b}_h1_model_main_effect.json` and `_cka.json`
 - `option_{a,b}_h2_demographic_main_effect.csv`
 - `option_{a,b}_h4_model_x_perturbation_interaction.json`
 - `option_{a,b}_pairwise_comparisons_bonferroni.csv`
 
-The remaining files (H2/H4/pairwise CKA variants, H3, and Option B's
-outlier-supplementary CSVs) are cited directly in the dissertation's tables
-and prose rather than plotted.
+The remaining files (H2/H4/pairwise CKA variants, H3, Option B's
+outlier-supplementary CSVs, and the per-model H4 breakdown below) are cited
+directly in the dissertation's tables and prose rather than plotted by this
+script.
+
+## Per-model H4 breakdown (not read by this script)
+
+`option_b_h4_per_model.csv` (51 rows: 3 models x 17 perturbations, each row
+a per-model OLS coefficient with Bonferroni-corrected significance) is
+bundled in `data/` for provenance alongside the rest of the real Phase B
+output, but is **not** read by `15_make_figures.py` as currently written.
+This file is the source for the dissertation's Figures 5.2b and 5.5b (a
+per-model breakdown of the pooled H4 mixed-effects and H2 demographic-gap
+figures this script does generate), which were produced in a separate,
+ad hoc session and are not backed by a reusable script currently held in
+this project. If that script becomes available, it belongs alongside
+`15_make_figures.py` in `scripts/04_reporting/`; until then, this gap is
+recorded here rather than silently omitted.
 
 ## Output: 13 figures, each as PNG and SVG
 

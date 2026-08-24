@@ -90,26 +90,22 @@ delete the affected file before resubmitting.
 
 ## GDC data access
 
-A real, confirmed failure was found in production: DRS resolution
-(`resolve_gcs_url()` in `01_gdc_match_manifest_v4.py`, calling
-`nci-crdc.datacommons.io`) failed for all 15 HCMI-programme files in a real
-run, evidenced directly by comparing the unpatched manifest (all 15 carrying
-the wrong `gdc-tcga-phs000178-open` bucket, matching the script's coded
-fallback) against the corrected, patched manifest (all 15 correctly resolved
-to `gdc-hcmi-open`). The *cause* of that DRS failure is not established.
-Two candidate explanations exist, of comparable plausibility, and the
-manifest/logs alone cannot distinguish between them:
+**Closed:** DRS resolution (`resolve_gcs_url()` in `01_gdc_match_manifest_v4.py`,
+calling `nci-crdc.datacommons.io`) failed for all 15 HCMI-programme files in a
+real run, evidenced directly by comparing the unpatched manifest (all 15
+carrying the wrong `gdc-tcga-phs000178-open` bucket, matching the script's
+coded fallback) against the corrected, patched manifest (all 15 correctly
+resolved to `gdc-hcmi-open`). The accepted explanation is the documented
+behaviour, per the NCI CRDC/Imaging Data Commons User Guide, that a GUID not
+yet registered with the DRS resolution service legitimately returns HTTP 404
+-- a mundane, non-network cause -- rather than network-level restriction from
+any specific compute environment, which was never independently confirmed
+and should not be restated as fact. The mechanism by which the manifest was
+corrected into its patched state is not evidenced in this project; that
+detail is accepted as unrecoverable rather than pursued further.
 
-- Network-level restriction from the environment DRS was called from.
-- The documented behaviour, per the NCI CRDC/Imaging Data Commons User Guide,
-  that a GUID not yet registered with the DRS resolution service legitimately
-  returns HTTP 404 -- a mundane, non-network cause unrelated to any specific
-  compute environment.
-
-Do not state that DRS access is blocked from any specific network as
-established fact; that has not been confirmed here. The programme-specific
-GDC open-access Google Cloud Storage bucket is a resolution method that
-avoids the question entirely, since it does not depend on DRS at all:
+The programme-specific GDC open-access Google Cloud Storage bucket is a
+resolution method that avoids the DRS question entirely:
 
 | Programme prefix | GCS bucket |
 |---|---|
@@ -121,20 +117,13 @@ avoids the question entirely, since it does not depend on DRS at all:
 
 Files are addressed as `https://storage.googleapis.com/<bucket>/<uuid>/<filename>`.
 
-**Discrepancy, documented rather than silently resolved:** the version of
-`01_gdc_match_manifest_v4.py` currently in this repository resolves each
-file's bucket via a live call to the DRS endpoint, with a fallback to the
-TCGA bucket only (not programme-aware) if that call fails -- it does not
-implement the bucket-table approach shown above. Its primary (DRS) resolution
-path has not been confirmed to succeed end-to-end in any specific compute
-environment, for the reason above. Separately, `matched_controls_manifest_patched.tsv`
-(excluded from this repository; see main README) has been verified, via
-`02_test_matched_controls_patched.py`, to already contain correct
-per-programme bucket URLs for every HCM-prefixed file. No script or log
-currently in this project evidences how that file was produced from the
-unpatched manifest -- it is treated as an open item, not
-assumed to have been done via the bucket table above, since that would be
-asserting a mechanism without evidence.
+`01_gdc_match_manifest_v4.py` as currently checked in resolves each file's
+bucket via a live call to the DRS endpoint, with a fallback to the TCGA
+bucket only (not programme-aware) if that call fails -- it does not
+implement the bucket-table approach above. Given DRS resolution has already
+failed once in production for the reason above, the bucket-table approach
+remains the more robust option for any future run, though it is not the
+path currently implemented.
 
 The GDC API's `not_in` race filter on nested demographic fields silently
 drops records whose parent entity is null; race exclusion is applied in

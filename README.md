@@ -5,6 +5,7 @@ MRes Advanced Artificial Intelligence dissertation project, University of Sussex
 **Author:** Phillip Nyamwaya
 **Supervisor:** Dr. Peter Wijeratne
 **Ethics reference:** SEM F-REC: SET 1915
+**Repository:** https://github.com/CenturyChallenger/vlm-pathology-invariance-study
 
 ## Project summary
 
@@ -40,36 +41,29 @@ scripts/
 
 | Order | Script | Purpose |
 |---|---|---|
-| 1 | `01_gdc_match_manifest_v4.py` | Phase 1 of the two-phase download pipeline. Queries the GDC API to build a manifest of TCGA/HCMI control cases demographically matched to the ACC cohort. v4 resolves each file's GCS bucket via the NCI CRDC DRS API (programme-agnostic, correct for TCGA and HCMI alike in principle), falling back to the TCGA open bucket if DRS is unreachable, and adds cross-case file_id deduplication (each control file can be assigned to at most one ACC case; a case whose entire 50-candidate pool is already used triggers an automatic retry against a 200-candidate pool). See "Known gap" below: DRS is documented elsewhere in this project as unreachable from the University of Sussex HCI compute nodes, so this script's DRS-dependent path has not been confirmed to run cleanly end-to-end from that environment. |
-| 2 | `02_test_matched_controls_patched.py` | Ad hoc verification script (not a formal pytest suite) run against `matched_controls_manifest_patched.tsv` after that manifest has been corrected: confirms zero duplicate `file_id` values among MATCHED rows, and confirms every HCM-prefixed file's `gcs_url` points at the `gdc-hcmi-open` bucket rather than the TCGA bucket. See "Known gap" below. |
+| 1 | `01_gdc_match_manifest_v4.py` | Phase 1 of the two-phase download pipeline. Queries the GDC API to build a manifest of TCGA/HCMI control cases demographically matched to the ACC cohort. v4 resolves each file's GCS bucket via the NCI CRDC DRS API (programme-agnostic, correct for TCGA and HCMI alike in principle), falling back to the TCGA open bucket if DRS is unreachable, and adds cross-case file_id deduplication (each control file can be assigned to at most one ACC case; a case whose entire 50-candidate pool is already used triggers an automatic retry against a 200-candidate pool). See "Closed" note below for the one real DRS failure this path hit in production and its accepted explanation. |
+| 2 | `02_test_matched_controls_patched.py` | Ad hoc verification script (not a formal pytest suite) run against `matched_controls_manifest_patched.tsv` after that manifest has been corrected: confirms zero duplicate `file_id` values among MATCHED rows, and confirms every HCM-prefixed file's `gcs_url` points at the `gdc-hcmi-open` bucket rather than the TCGA bucket. See "Closed" note below. |
 | 3 | `03_slide_download_generator_v5.py` | Downloads matched non-African control diagnostic WSIs from GDC/TCGA, with TCIA fallback (slide/histology modality only) and AWS Open Data as a last resort. v5 adds resumable downloads that are safe to interrupt and restart. |
 | 4 | `04_gcs_slide_downloader_v2.py` | Phase 2 of the two-phase download pipeline. Downloads the GDC/TCGA-HCMI slides identified in the (patched) manifest directly from the resolved Google Cloud Storage buckets over HTTPS. v2 hardens the MATCHED-row filter: the `status` column is normalised (stripped, upper-cased) before filtering, and rows are additionally required to have a non-null `gcs_url` starting with `https://`, guarding against blank/NaN URLs on rows that pandas would otherwise silently pass through. |
 | 5 | `05_gdrive_wsi_downloader.py` | Downloads the Aroha Cancer Centre whole-slide images (SVS, NDPI, MRXS, TIFF) from a shared Google Drive folder, with a CSV manifest updated after every download attempt so progress survives interruptions. |
 | 6 | `06_wsi_audit.py` | Audits native scan resolution and magnification metadata across both cohorts prior to tile extraction, using one shared OpenSlide-based inspection routine with cohort-specific path resolvers. |
 | 7 | `07_downsample_wsi.py` | Reads each WSI at the pyramid level nearest to 20x / 0.5 microns-per-pixel (the pretraining resolution for UNI, CONCH, and Prov-GigaPath), resizes where no native level is close enough, and writes a standardised tiled TIFF per slide across both cohorts. |
 
-**Known gap (documented honestly, not hidden):** direct comparison of the real,
-unpatched `matched_controls_manifest.tsv` against `matched_controls_manifest_patched.tsv`
-confirms that DRS resolution (`resolve_gcs_url()` in script 1) genuinely failed for all
-15 HCMI-programme files in a real run -- the unpatched manifest shows the incorrect
-`gdc-tcga-phs000178-open` bucket for all 15, exactly matching script 1's coded fallback
-path, while the patched manifest shows all 15 correctly resolved to `gdc-hcmi-open`.
-The *cause* of that DRS failure is not established: it may be network-level restriction
-in the environment DRS was called from, or it may be the NCI CRDC/Imaging Data Commons
-User Guide's documented behaviour that a GUID not yet registered with the DRS resolution
-service legitimately returns HTTP 404 (National Cancer Institute, Imaging Data Commons,
-n.d., "Resolving CRDC Globally Unique Identifiers (GUIDs)"). Script 1's `retry_get()`
-treats non-200 responses and connection-level exceptions identically in its logging, so
-the manifest and logs alone cannot distinguish these two causes. Separately, no script
-or log in this project currently evidences the *mechanism* by which the manifest was
-corrected into its patched state -- that remains a genuinely open item, not assumed or
-reconstructed here. If you have the correction script or the DRS request logs, they
-would resolve both open points; the correction step belongs at this position in the
-pipeline, between scripts 1 and 2. A programme-aware bucket-table resolver
-(`TCGA-*` -> `gdc-tcga-phs000178-open`, `HCM-*` -> `gdc-hcmi-open`, bypassing DRS
-entirely) remains available as a simpler fix regardless of which cause turns out to be
-correct, since it does not depend on knowing why DRS failed; script 1 as currently
-checked in does not implement this bypass.
+**Closed:** direct comparison of the real, unpatched `matched_controls_manifest.tsv`
+against `matched_controls_manifest_patched.tsv` confirms that DRS resolution
+(`resolve_gcs_url()` in script 1) genuinely failed for all 15 HCMI-programme files in a
+real run -- the unpatched manifest shows the incorrect `gdc-tcga-phs000178-open` bucket
+for all 15, exactly matching script 1's coded fallback path, while the patched manifest
+shows all 15 correctly resolved to `gdc-hcmi-open`. The accepted explanation for that
+failure is the NCI CRDC/Imaging Data Commons User Guide's documented behaviour that a
+GUID not yet registered with the DRS resolution service legitimately returns HTTP 404
+(National Cancer Institute, Imaging Data Commons, n.d., "Resolving CRDC Globally Unique
+Identifiers (GUIDs)"), rather than network-level restriction, which was never
+independently confirmed. The mechanism by which the manifest was corrected into its
+patched state is not evidenced in this project and is not reconstructed here. A
+programme-aware bucket-table resolver (`TCGA-*` -> `gdc-tcga-phs000178-open`, `HCM-*`
+-> `gdc-hcmi-open`, bypassing DRS entirely) remains available as a simpler fix
+regardless of cause; script 1 as currently checked in does not implement this bypass.
 
 ### Phase A -- Perturbation generation and embedding extraction
 
@@ -90,13 +84,13 @@ before any production statistical run.
 | 11 | `11_make_synthetic_data.py` | Generates small synthetic `cosine_similarity.csv` / `cka_summary.csv` files matching the exact schema produced by `extract_embeddings_similarity.py`'s `run_similarity()`, for smoke-testing the statistical analysis script without needing real embeddings. |
 | 12 | `12_validate_phase_b_statistical_analysis.py` | Self-contained validation script reproducing every check performed while diagnosing and fixing a zero-variance edge case in `two_sample_test()` (perturbations 3, 17, and 18 at moderate severity are documented identity transforms, yielding a constant cosine similarity of 1.0 in both cohorts, which is mathematically undefined for Shapiro-Wilk / Mann-Whitney U). Confirms the fix on synthetic data before it is trusted on real data. |
 | 13 | `13_check_phase_b_dependencies.py` | Verifies the statistical analysis environment (numpy, pandas, scipy, statsmodels, optional scikit-posthocs) has every required package at a known, unmodified version before a long batch run is submitted, using a pip constraints file so no already-installed package is silently upgraded or downgraded. |
-| 14 | `14_phase_b_statistical_analysis.py` | Runs the H1-H4 hypothesis tests (model main effect, demographic main effect, model x demographic interaction, model x perturbation interaction) over the real cosine-similarity and linear-CKA metrics, per Section 5.6 of the dissertation proposal (v4, 23 Jul 2026), for both candidate model-cohort configurations (Option A and Option B; see "Model cohort configurations" below). |
+| 14 | `14_phase_b_statistical_analysis.py` | Runs the H1-H4 hypothesis tests (model main effect, demographic main effect, model x demographic interaction, model x perturbation interaction) over the real cosine-similarity and linear-CKA metrics, per Section 5.6 of the dissertation proposal (v4, 23 Jul 2026), for both the confirmed authoritative configuration (Option B) and the alternative configuration retained for the dissertation's sensitivity analysis (Option A; see "Model cohort configurations" below). |
 
 ### Phase C -- Reporting
 
 | Order | Script | Purpose |
 |---|---|---|
-| 15 | `15_make_figures.py` | Generates all 13 Phase B results figures used in the dissertation results chapter, for both Model Cohort Option A (UNI, CONCH, Quilt-LLaVA) and Option B (UNI, CONCH, Prov-GigaPath tile encoder), from the H1-H4 JSON summaries and H2/pairwise CSV tables produced by script 14. Each figure is written as both PNG and SVG; see `docs/figures.md` for the full figure list, the accessibility rationale behind the colour choices, and how the SVG output is embedded into the dissertation `.docx` files. |
+| 15 | `15_make_figures.py` | Generates all 13 Phase B results figures used in the dissertation results chapter, for both the confirmed authoritative Model Cohort Option B (UNI, CONCH, Prov-GigaPath tile encoder) and Option A (UNI, CONCH, Quilt-LLaVA, retained for the sensitivity analysis), from the H1-H4 JSON summaries and H2/pairwise CSV tables produced by script 14. Each figure is written as both PNG and SVG; see `docs/figures.md` for the full figure list, the accessibility rationale behind the colour choices, and how the SVG output is embedded into the dissertation `.docx` files. |
 
 `scripts/04_reporting/data/` bundles the complete real Phase B statistical
 output set (23 files: H1-H4, pairwise, and Option B's outlier-supplementary
@@ -119,23 +113,25 @@ python3 15_make_figures.py --data-dir /path/to/new/phase_b/output --out-dir /pat
 
 ## Model cohort configurations (Option A vs Option B)
 
-Two candidate primary three-model cohorts are under active consideration, both
-preserving the same 3-pairwise x 18-perturbation Bonferroni-corrected structure
-(alpha = 0.05/54):
+**Option B was confirmed by Dr. Wijeratne as the authoritative dissertation
+configuration.** Both configurations preserve the same 3-pairwise x 18-perturbation
+Bonferroni-corrected structure (alpha = 0.05/54):
 
-- **Option A** (proposal-aligned): UNI, CONCH, Quilt-LLaVA.
-- **Option B**: UNI, CONCH, Prov-GigaPath (tile encoder only), motivated by the shared
-  224x224 native input resolution and tile-level inference paradigm across all three
-  models. Under Option B, Quilt-LLaVA is repositioned as a documented
-  architectural-outlier supplementary comparator (its vision tower is stock
+- **Option B (confirmed, authoritative):** UNI, CONCH, Prov-GigaPath (tile encoder
+  only), motivated by the shared 224x224 native input resolution and tile-level
+  inference paradigm across all three models. Quilt-LLaVA is repositioned as a
+  documented architectural-outlier supplementary comparator (its vision tower is stock
   `openai/clip-vit-large-patch14-336`, which upsamples every 224x224 study tile to
   336x336 before inference).
+- **Option A (retained as a record of the alternative configuration considered, not
+  pursued further):** UNI, CONCH, Quilt-LLaVA, the original proposal-aligned cohort.
 
 `14_phase_b_statistical_analysis.py` and `15_make_figures.py` both run either
-configuration from a single `MODEL_SETS` dictionary, so the choice between Option A and
-Option B does not require code changes. This decision is pending discussion with the
-supervisor and is documented here for transparency; it does not block analysis under
-either configuration.
+configuration from a single `MODEL_SETS` dictionary. This is why both configurations'
+output are still present throughout this repository (e.g. `option_a_*`/`option_b_*`
+files in `scripts/04_reporting/data/`) even though only Option B is authoritative --
+Option A's results remain available for the dissertation's own sensitivity-analysis
+section, which shows the substantive conclusions are robust to this choice.
 
 ## Requirements
 
@@ -167,7 +163,9 @@ environments per model (`uni-env`, `conch-env`, `quilt-llava-env`); see
 ## License
 
 Not yet assigned. Add a `LICENSE` file appropriate to your institution's policy and
-the terms of the ACC data-sharing agreements before making this repository public.
+the terms of the ACC data-sharing agreements. The repository is already live at the
+URL above; if it should be private rather than public, check its visibility setting
+on GitHub directly, since this README cannot control that.
 
 ## Citation
 

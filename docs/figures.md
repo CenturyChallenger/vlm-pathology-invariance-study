@@ -11,7 +11,7 @@ own location by default, so it will look for input files in a `data/`
 subdirectory next to the script unless told otherwise:
 
 ```bash
-# Generate all 13 figures (both options), reading from ./data next to the script
+# Generate all figures (both options), reading from ./data next to the script
 python3 14_make_figures.py
 
 # Generate only one cohort configuration
@@ -86,22 +86,29 @@ correctly identified that perturbation as the largest and most significant
 coefficient for every model; run against a copy missing a required column,
 it failed immediately with a clear error rather than partway through a fit.
 
-**Two things this closes only partially, documented honestly:**
+**CLOSED (25 Aug 2026):** `15_make_figures.py` now reads
+`option_{a,b}_h4_per_model.csv` via `fig_h4_perturbation_ranking_per_model()`.
+Matching the dissertation's actual rendering (verified directly against the
+real dissertation text before implementing, not assumed), this produces
+**three separate per-model figures** rather than one combined panel:
+`option_b_fig_5_5b_1_uni`, `_2_conch`, `_3_gigapath_tile`, each with real
+significance asterisks, sharing the same perturbation row order (matching
+Figure 5.5's pooled ranking) and the same x-axis scale across all three, so
+the same perturbation can be compared directly across models. If the
+per-model CSV is absent for a given option (currently true for Option A, for
+which this analysis has not been run), Figure 5.5b is skipped for that
+option with a printed note, rather than failing or fabricating a substitute
+from different data.
 
-- `option_b_h4_per_model.csv` (bundled in `data/` since 21 Aug 2026) is the
-  source for the dissertation's Figures 5.2b and 5.5b, but `15_make_figures.py`
-  as currently written still does not read it -- the `fig_h4_perturbation_ranking_per_model()`
-  function referenced in this script's own documentation, which would add
-  significance asterisks to Figure 5.5b matching Figure 5.5's style, was
-  built in a separate ad hoc session and is not yet held in this repo. This
-  script closes the "no p-values exist yet" half of the gap; wiring
-  `15_make_figures.py` to use them remains open.
-- A companion Slurm submission script (`submit_h4_per_model.sh`, referenced
-  in this script's own usage instructions for running on the Artemis
-  cluster) has not been supplied to this repository and is not fabricated
-  here. If it becomes available, it belongs alongside this script.
+Note: `option_b_h4_per_model.csv` is not a source for Figure 5.2b, despite
+both being informally grouped together in earlier notes on this repo --
+Figure 5.2b (a raw-unit cosine-similarity difference heatmap, ACC minus GDC)
+is sourced from the H2 CSV already read by `fig_demographic_gap_heatmap()`
+and `fig_cosine_heatmap()`, not from the per-model H4 file. Figure 5.2b
+remains unimplemented in this script and is a separate, still-open item --
+its own gap, not resolved by this change.
 
-## Output: 13 figures, each as PNG and SVG
+## Output: 13 (+3 per option, if the per-model H4 CSV is present) figures, each as PNG and SVG
 
 | Output file (base name) | Dissertation figure | Content |
 |---|---|---|
@@ -110,6 +117,7 @@ it failed immediately with a clear error rather than partway through a fit.
 | `option_{a,b}_fig_5_3_severity_trends` | Figure 5.3 | Mean cosine similarity vs. severity (mild/moderate/severe), one panel per perturbation category |
 | `option_{a,b}_fig_5_4_demographic_gap_heatmap` | Figure 5.4 | Demographic robustness gap (Cohen's d, ACC minus GDC) by perturbation x model, with Bonferroni-significance markers |
 | `option_{a,b}_fig_5_5_h4_perturbation_ranking` | Figure 5.5 | H4 mixed-effects perturbation coefficients, ranked, coloured by perturbation category |
+| `option_{a,b}_fig_5_5b_{1,2,3}_{model}` | Figure 5.5b(i)/(ii)/(iii) | Per-model H4 perturbation coefficients with real significance testing (script 14b), one figure per model, shared row order and x-axis scale. Only generated if `option_{a,b}_h4_per_model.csv` is present (currently Option B only). |
 | `option_{a,b}_fig_5_6_h1_model_main_effect` | Figure 5.6 | H1 model main effect, cosine similarity and linear CKA side by side |
 | `option_{a,b}_fig_5_7_pairwise_comparison` | Figure 5.7 | Pairwise model comparison summary (mean Cohen's d per pair) |
 

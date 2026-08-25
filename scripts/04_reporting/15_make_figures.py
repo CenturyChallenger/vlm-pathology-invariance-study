@@ -27,23 +27,32 @@ DATA_DIR must contain these files per option (produced by
     option_{a,b}_h4_model_x_perturbation_interaction.json
     option_{a,b}_pairwise_comparisons_bonferroni.csv
 
+Optionally, if present, also read for Figure 5.5b:
+    option_{a,b}_h4_per_model.csv (produced by 14b_compute_h4_per_model.py;
+    if absent for a given option, Figure 5.5b is skipped for that option
+    with a printed note, rather than failing)
+
 Note: the CKA variants of H2/H4/pairwise, the H3 files, and the Option B
 outlier-supplementary files are part of the full Phase B output set and
 are cited directly in the dissertation text/tables, but are not read by
 this figure-generation script. The bundled data/ folder includes the
-complete 22-file Phase B output set for completeness and provenance,
-even though only the 10 files above (5 per option) are actually used
-here.
+complete Phase B output set for completeness and provenance, even though
+only the files above are actually used here.
 
 OUTPUT
 ------
-13 figures written to OUT_DIR, each as both PNG and SVG (26 files total),
-matching the #FIGURE: references in dissertation.md / dissertation_optionB.md:
+Figures written to OUT_DIR, each as both PNG and SVG, matching the
+#FIGURE: references in dissertation.md / dissertation_optionB.md:
     shared_fig_5_1_phase_a_throughput.{png,svg}
     option_{a,b}_fig_5_2_cosine_heatmap.{png,svg}
     option_{a,b}_fig_5_3_severity_trends.{png,svg}
     option_{a,b}_fig_5_4_demographic_gap_heatmap.{png,svg}
     option_{a,b}_fig_5_5_h4_perturbation_ranking.{png,svg}
+    option_{a,b}_fig_5_5b_{1,2,3}_{model}.{png,svg}  (only if
+        option_{a,b}_h4_per_model.csv is present; one separate figure
+        per model, e.g. option_b_fig_5_5b_1_uni, _2_conch, _3_gigapath_tile,
+        matching the dissertation's actual per-model rendering -- not one
+        combined multi-panel figure)
     option_{a,b}_fig_5_6_h1_model_main_effect.{png,svg}
     option_{a,b}_fig_5_7_pairwise_comparison.{png,svg}
 
@@ -420,6 +429,109 @@ def fig_h4_perturbation_ranking(option):
 
 
 # =======================================================================
+# FIGURE 5.5b: H4 per-model perturbation vulnerability ranking
+# =======================================================================
+def fig_h4_perturbation_ranking_per_model(option, models_order):
+    """
+    Per-model breakdown of Figure 5.5, closing the gap the pooled
+    mixed-effects model cannot answer: whether one model is more or less
+    sensitive to a given perturbation than another (model enters the
+    pooled fit only as a random intercept, so it cannot resolve this).
+
+    Reads option_{option}_h4_per_model.csv, produced by
+    14b_compute_h4_per_model.py from an independent OLS fit on each
+    model's own raw tile-level data -- a real significance test per
+    model, not a descriptive re-slicing of already-averaged numbers.
+
+    Matches the dissertation's actual rendering: ONE SEPARATE FIGURE per
+    model (Figure 5.5b(i), (ii), (iii) -- not one combined multi-panel
+    figure), sharing the same perturbation row order and the same
+    x-axis scale across all three, so the same perturbation can be
+    compared directly across models by eye. Row order matches the
+    pooled Figure 5.5 ranking for consistency between the two figures.
+
+    If the per-model CSV is not present for this option (e.g. Option A,
+    for which this analysis has not been run), prints a clear note and
+    skips generating these figures for that option, rather than failing
+    or fabricating a substitute breakdown from different data.
+    """
+    csv_path = Path(DATA) / f"option_{option}_h4_per_model.csv"
+    if not csv_path.exists():
+        print(
+            f"Note: {csv_path.name} not found -- skipping Figure 5.5b for "
+            f"option {option}. Run 14b_compute_h4_per_model.py against the "
+            f"real cosine_similarity.csv to produce this file first."
+        )
+        return
+
+    pm = pd.read_csv(csv_path)
+
+    # Shared row order: same perturbation ordering as the pooled Figure 5.5,
+    # so the two figures are directly comparable perturbation-by-perturbation.
+    with open(f"{DATA}/option_{option}_h4_model_x_perturbation_interaction.json") as f:
+        h4 = json.load(f)
+    fe = h4["fixed_effects"]
+    pooled_rows = [(1, 0.0)]
+    for key, val in fe.items():
+        if key == "Intercept":
+            continue
+        pid = int(key.split("T.")[1].rstrip("]"))
+        pooled_rows.append((pid, val["coef"]))
+    pooled_rows.sort(key=lambda r: r[1])
+    row_order = [r[0] for r in pooled_rows]
+    labels = [pert_label(p) for p in row_order]
+
+    # Shared x-axis scale across all three per-model figures.
+    all_coefs = pm[pm["perturbation_id"].isin(row_order)]["coef"]
+    xlim = max(abs(all_coefs.min()), abs(all_coefs.max())) * 1.15
+
+    roman = {1: "i", 2: "ii", 3: "iii"}
+    for idx, m in enumerate(models_order, start=1):
+        msub = pm[pm["model"] == m].set_index("perturbation_id")
+        # Perturbation 1 is the reference level and has no row of its own
+        # in the per-model CSV (coefficient 0 by construction, matching
+        # how script 14b's fit_one_model() drops the Intercept term).
+        coefs = [msub.loc[pid, "coef"] if pid in msub.index else 0.0 for pid in row_order]
+        sig = [
+            bool(msub.loc[pid, "significant_bonferroni"]) if pid in msub.index else False
+            for pid in row_order
+        ]
+        colors = [CAT_COLORS[PERT_CATEGORY[pid]] for pid in row_order]
+        hatches = [CAT_HATCHES[PERT_CATEGORY[pid]] for pid in row_order]
+
+        fig, ax = plt.subplots(figsize=(7.5, 6.5))
+        bars = ax.barh(labels, coefs, color=colors, hatch=hatches, edgecolor="black", linewidth=0.7)
+        for b, s in zip(bars, sig):
+            if s:
+                x = b.get_width()
+                ax.text(x + (0.006 if x >= 0 else -0.006), b.get_y() + b.get_height() / 2, "*",
+                        va="center", ha="left" if x >= 0 else "right", fontsize=11, fontweight="bold")
+        ax.axvline(0, color="black", linewidth=0.8)
+        ax.set_xlim(-xlim, xlim)
+        ax.set_xlabel(
+            f"Coefficient (change in cosine similarity relative to\n"
+            f"Perturbation 01 baseline, {MODEL_LABELS[m]} only)"
+        )
+        ax.set_title(
+            f"Figure 5.5b({roman[idx]}): Perturbation-Level Vulnerability Ranking -- {MODEL_LABELS[m]}\n"
+            f"(Independent Per-Model OLS Fit, Real Tile-Level Data)\n"
+            "(* = significant at Bonferroni-corrected \u03b1 = 0.05/54)\n"
+            + ("Option A" if option == "a" else "Option B"),
+            fontsize=10,
+        )
+        legend_patches = [
+            mpatches.Patch(facecolor=CAT_COLORS[k], hatch=CAT_HATCHES[k], edgecolor="black", label=k)
+            for k in CAT_COLORS
+        ]
+        ax.legend(handles=legend_patches, loc="lower right", fontsize=7, framealpha=0.9)
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.grid(axis="x", alpha=0.3, linestyle="--")
+        fig.tight_layout()
+        save_both_formats(fig, f"{OUT}/option_{option}_fig_5_5b_{idx}_{m}")
+        plt.close(fig)
+
+
+# =======================================================================
 # FIGURE 5.6 (NEW): H1 model main effect (cosine + CKA side by side)
 # =======================================================================
 def fig_h1_model_main_effect(option, models_order):
@@ -550,6 +662,7 @@ def main():
         fig_severity_trends(opt, cfg["models_order"])
         fig_demographic_gap_heatmap(opt, cfg["models_order"])
         fig_h4_perturbation_ranking(opt)
+        fig_h4_perturbation_ranking_per_model(opt, cfg["models_order"])
         fig_h1_model_main_effect(opt, cfg["models_order"])
         fig_pairwise_comparison(opt, cfg["pairs"])
         print(f"Option {opt.upper()}: figures done.")

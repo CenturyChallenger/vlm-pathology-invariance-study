@@ -85,7 +85,7 @@ before any production statistical run.
 | 12 | `12_validate_phase_b_statistical_analysis.py` | Self-contained validation script reproducing every check performed while diagnosing and fixing a zero-variance edge case in `two_sample_test()` (perturbations 3, 17, and 18 at moderate severity are documented identity transforms, yielding a constant cosine similarity of 1.0 in both cohorts, which is mathematically undefined for Shapiro-Wilk / Mann-Whitney U). Confirms the fix on synthetic data before it is trusted on real data. |
 | 13 | `13_check_phase_b_dependencies.py` | Verifies the statistical analysis environment (numpy, pandas, scipy, statsmodels, optional scikit-posthocs) has every required package at a known, unmodified version before a long batch run is submitted, using a pip constraints file so no already-installed package is silently upgraded or downgraded. |
 | 14 | `14_phase_b_statistical_analysis.py` | Runs the H1-H4 hypothesis tests (model main effect, demographic main effect, model x demographic interaction, model x perturbation interaction) over the real cosine-similarity and linear-CKA metrics, per Section 5.6 of the dissertation proposal (v4, 23 Jul 2026), for both the confirmed authoritative configuration (Option B) and the alternative configuration retained for the dissertation's sensitivity analysis (Option A; see "Model cohort configurations" below). |
-| 14b | `14b_compute_h4_per_model.py` | Supplementary to script 14's pooled H4 test: fits the same fixed-effect structure separately per model (collapsing to plain OLS, since the pooled mixed model's random-intercept term is unneeded once each fit only sees one model's data), giving a real p-value and Bonferroni-corrected significance flag to each model's own perturbation coefficients. Produces `option_{a,b}_h4_per_model.csv`, the source data for dissertation Figures 5.2b and 5.5b. Reads the raw `cosine_similarity.csv` from script 10, not the summary files in `scripts/04_reporting/data/`. See `docs/figures.md` for the full grounding, validation evidence, and two related gaps still open (the `make_figures.py` wiring to actually plot these significance markers, and a companion Slurm submission script referenced in this script's own docs but not included here). |
+| 14b | `14b_compute_h4_per_model.py` | Supplementary to script 14's pooled H4 test: fits the same fixed-effect structure separately per model (collapsing to plain OLS, since the pooled mixed model's random-intercept term is unneeded once each fit only sees one model's data), giving a real p-value and Bonferroni-corrected significance flag to each model's own perturbation coefficients. Produces `option_{a,b}_h4_per_model.csv`, the source data for dissertation Figure 5.5b (not Figure 5.2b -- see `docs/figures.md`). Reads the raw `cosine_similarity.csv` from script 10, not the summary files in `scripts/04_reporting/data/`. See `docs/figures.md` for the full grounding and validation evidence. |
 
 ### Phase C -- Reporting
 
@@ -99,12 +99,11 @@ results in both cosine-similarity and linear-CKA variants, plus a per-model
 H4 breakdown produced by `14b_compute_h4_per_model.py`) actually used to
 produce the figures embedded in both dissertation drafts. These are
 aggregate statistical summaries only, not patient data, so the script runs
-correctly out of the box. Note that `15_make_figures.py` reads only 10 of
-these 23 files; see `docs/figures.md` for exactly which, and for the
-remaining gap around `option_b_h4_per_model.csv` (script 14b now produces
-this file with real significance values, but `15_make_figures.py` does not
-yet read it -- the dissertation's Figures 5.2b/5.5b that use it were built
-in a separate ad hoc session not yet reflected in this script):
+correctly out of the box. `15_make_figures.py` reads 10 of these files
+unconditionally, plus `option_{a,b}_h4_per_model.csv` if present (currently
+Option B only) to generate Figure 5.5b; see `docs/figures.md` for exactly
+which files map to which figures, and for Figure 5.2b, which remains a
+separate, still-unimplemented item unrelated to this file:
 
 ```bash
 cd scripts/04_reporting

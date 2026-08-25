@@ -470,7 +470,11 @@ def fig_h4_perturbation_ranking(option):
     colors = [CAT_COLORS[PERT_CATEGORY[r[0]]] for r in rows]
     hatches = [CAT_HATCHES[PERT_CATEGORY[r[0]]] for r in rows]
 
-    fig, ax = plt.subplots(figsize=(7.5, 6.5))
+    # Extra figure height (6.5 -> 7.3) reserves a dedicated strip below the
+    # axes for the category legend, so it sits in empty margin space rather
+    # than overlapping any bar (the largest bars, e.g. Perturbation 09,
+    # previously ran under a lower-right in-axes legend box).
+    fig, ax = plt.subplots(figsize=(7.5, 7.3))
     bars = ax.barh(labels, coefs, color=colors, hatch=hatches, edgecolor="black", linewidth=0.7)
     for b, s in zip(bars, sig):
         if s:
@@ -489,10 +493,16 @@ def fig_h4_perturbation_ranking(option):
         mpatches.Patch(facecolor=CAT_COLORS[k], hatch=CAT_HATCHES[k], edgecolor="black", label=k)
         for k in CAT_COLORS
     ]
-    ax.legend(handles=legend_patches, loc="lower right", fontsize=7, framealpha=0.9)
+    # Legend placed outside and below the axes (figure-level, not axes-level),
+    # in its own two-row strip beneath the x-axis label, so it cannot overlap
+    # any bar regardless of which perturbation happens to be largest.
+    fig.legend(
+        handles=legend_patches, loc="lower center", bbox_to_anchor=(0.5, 0.0),
+        ncol=3, fontsize=7.5, framealpha=0.9, frameon=True,
+    )
     ax.spines[["top", "right"]].set_visible(False)
     ax.grid(axis="x", alpha=0.3, linestyle="--")
-    fig.tight_layout()
+    fig.tight_layout(rect=[0, 0.09, 1, 1])
     save_both_formats(fig, f"{OUT}/option_{option}_fig_5_5_h4_perturbation_ranking")
     plt.close(fig)
 
@@ -568,7 +578,11 @@ def fig_h4_perturbation_ranking_per_model(option, models_order):
         colors = [CAT_COLORS[PERT_CATEGORY[pid]] for pid in row_order]
         hatches = [CAT_HATCHES[PERT_CATEGORY[pid]] for pid in row_order]
 
-        fig, ax = plt.subplots(figsize=(7.5, 6.5))
+        # Same fix as Figure 5.5: extra figure height (6.5 -> 7.3) reserves a
+        # dedicated strip below the axes for the category legend, so it sits
+        # in empty margin space rather than overlapping any bar. Applies
+        # per-iteration since each model gets its own fig/ax in this loop.
+        fig, ax = plt.subplots(figsize=(7.5, 7.3))
         bars = ax.barh(labels, coefs, color=colors, hatch=hatches, edgecolor="black", linewidth=0.7)
         for b, s in zip(bars, sig):
             if s:
@@ -592,10 +606,16 @@ def fig_h4_perturbation_ranking_per_model(option, models_order):
             mpatches.Patch(facecolor=CAT_COLORS[k], hatch=CAT_HATCHES[k], edgecolor="black", label=k)
             for k in CAT_COLORS
         ]
-        ax.legend(handles=legend_patches, loc="lower right", fontsize=7, framealpha=0.9)
+        # Legend placed outside and below the axes (figure-level, not
+        # axes-level), so it cannot overlap any bar regardless of which
+        # perturbation happens to be largest for this particular model.
+        fig.legend(
+            handles=legend_patches, loc="lower center", bbox_to_anchor=(0.5, 0.0),
+            ncol=3, fontsize=7.5, framealpha=0.9, frameon=True,
+        )
         ax.spines[["top", "right"]].set_visible(False)
         ax.grid(axis="x", alpha=0.3, linestyle="--")
-        fig.tight_layout()
+        fig.tight_layout(rect=[0, 0.09, 1, 1])
         save_both_formats(fig, f"{OUT}/option_{option}_fig_5_5b_{idx}_{m}")
         plt.close(fig)
 

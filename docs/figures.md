@@ -100,20 +100,34 @@ which this analysis has not been run), Figure 5.5b is skipped for that
 option with a printed note, rather than failing or fabricating a substitute
 from different data.
 
-Note: `option_b_h4_per_model.csv` is not a source for Figure 5.2b, despite
-both being informally grouped together in earlier notes on this repo --
-Figure 5.2b (a raw-unit cosine-similarity difference heatmap, ACC minus GDC)
-is sourced from the H2 CSV already read by `fig_demographic_gap_heatmap()`
-and `fig_cosine_heatmap()`, not from the per-model H4 file. Figure 5.2b
-remains unimplemented in this script and is a separate, still-open item --
-its own gap, not resolved by this change.
+**CLOSED (25 Aug 2026):** `15_make_figures.py` now generates Figure 5.2b via
+`fig_cosine_difference_heatmap()`. No source script for this figure was
+found anywhere in the project (project files directory checked directly,
+plus multiple targeted project-knowledge searches; only an older snapshot
+of `make_figures.py` predating both Figure 5.2b and 5.5b was retrievable) --
+this function was built fresh, using `mean_a - mean_b` from the same H2 CSV
+`fig_cosine_heatmap()` and `fig_demographic_gap_heatmap()` already read
+(not `option_{a,b}_h4_per_model.csv`, despite the two being informally
+grouped together in earlier notes on this repo -- that remains a real
+distinction, not merely a naming coincidence). Verified against the
+dissertation's own cited numbers before being considered correct, not
+assumed: UNI's raw gaps on Resolution Degradation (+0.215), Downsample-
+Upsample (+0.165), and JPEG Compression (+0.134), and CONCH's largest
+negative gap on Salt-and-Pepper Noise (-0.144), all reproduced exactly from
+the real bundled `option_b_h2_demographic_main_effect.csv`. Same PuOr
+colourblind-safe scheme and sign convention as Figure 5.4 (positive/purple
+= ACC more stable), auto-scaled symmetric range (unlike Figure 5.4's fixed
++/-2.0, since raw differences are a much smaller magnitude), signed 3-decimal
+cell annotations, no significance markers (this figure restates already-
+tested means rather than running its own test).
 
-## Output: 13 (+3 per option, if the per-model H4 CSV is present) figures, each as PNG and SVG
+## Output: 13 (+1 Figure 5.2b, +3 per option if the per-model H4 CSV is present) figures, each as PNG and SVG
 
 | Output file (base name) | Dissertation figure | Content |
 |---|---|---|
 | `shared_fig_5_1_phase_a_throughput` | Figure 5.1 | Phase A embedding extraction throughput by model (values hard-coded from the Phase A extraction log, not read from `data/`) |
 | `option_{a,b}_fig_5_2_cosine_heatmap` | Figure 5.2 | Cosine similarity to baseline at moderate severity, by perturbation x model, split by cohort (ACC / GDC) |
+| `option_{a,b}_fig_5_2b_cosine_difference_heatmap` | Figure 5.2b | Cosine similarity difference (ACC minus GDC, raw units) by perturbation x model, same sign convention as Figure 5.4 |
 | `option_{a,b}_fig_5_3_severity_trends` | Figure 5.3 | Mean cosine similarity vs. severity (mild/moderate/severe), one panel per perturbation category |
 | `option_{a,b}_fig_5_4_demographic_gap_heatmap` | Figure 5.4 | Demographic robustness gap (Cohen's d, ACC minus GDC) by perturbation x model, with Bonferroni-significance markers |
 | `option_{a,b}_fig_5_5_h4_perturbation_ranking` | Figure 5.5 | H4 mixed-effects perturbation coefficients, ranked, coloured by perturbation category |

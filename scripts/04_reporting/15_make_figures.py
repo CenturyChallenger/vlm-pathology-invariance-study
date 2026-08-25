@@ -45,6 +45,7 @@ Figures written to OUT_DIR, each as both PNG and SVG, matching the
 #FIGURE: references in dissertation.md / dissertation_optionB.md:
     shared_fig_5_1_phase_a_throughput.{png,svg}
     option_{a,b}_fig_5_2_cosine_heatmap.{png,svg}
+    option_{a,b}_fig_5_2b_cosine_difference_heatmap.{png,svg}
     option_{a,b}_fig_5_3_severity_trends.{png,svg}
     option_{a,b}_fig_5_4_demographic_gap_heatmap.{png,svg}
     option_{a,b}_fig_5_5_h4_perturbation_ranking.{png,svg}
@@ -281,6 +282,74 @@ def fig_cosine_heatmap(option, models_order):
         fontsize=11, fontweight="bold", y=0.995,
     )
     save_both_formats(fig, f"{OUT}/option_{option}_fig_5_2_cosine_heatmap")
+    plt.close(fig)
+
+
+# =======================================================================
+# FIGURE 5.2b: Cosine similarity difference heatmap (ACC - GDC, raw units)
+# =======================================================================
+def fig_cosine_difference_heatmap(option, models_order):
+    """
+    Restates Figure 5.2's ACC-vs-GDC comparison as a single raw-unit
+    difference (mean ACC minus mean GDC) instead of two separate panels
+    the reader must compare by eye. Deliberately complementary to Figure
+    5.4 rather than a duplicate: this shows how many units of cosine
+    similarity apart the two cohorts are and in which direction; Figure
+    5.4 shows how large that gap is relative to within-cohort variability
+    (Cohen's d). No significance markers are plotted here, since this is a
+    direct restatement of already-tested means, not a separate test.
+
+    Uses the same "a" = ACC, "b" = GDC convention as
+    phase_b_statistical_analysis.py's cohens_d(): mean_a - mean_b, so a
+    positive value means ACC is more stable, matching Figure 5.4's sign
+    convention and this project's established PuOr colour direction
+    (positive/purple = ACC more stable).
+    """
+    df = pd.read_csv(f"{DATA}/option_{option}_h2_demographic_main_effect.csv")
+    df = df[df["severity"] == "moderate"].copy()
+
+    pids = sorted(PERT_NAMES.keys())
+    mat = np.zeros((len(pids), len(models_order)))
+    for i, pid in enumerate(pids):
+        for j, m in enumerate(models_order):
+            row = df[(df["perturbation_id"] == pid) & (df["model"] == m)]
+            mat[i, j] = row["mean_a"].values[0] - row["mean_b"].values[0]
+
+    row_labels = [pert_label(p) for p in pids]
+    col_labels = [MODEL_LABELS[m] for m in models_order]
+
+    fig, ax = plt.subplots(figsize=(5.2, 8.5))
+    # PuOr, same rationale and sign convention as Figure 5.4 (see Appendix
+    # I): positive/purple = ACC more stable, negative/orange = GDC more
+    # stable. Auto-scaled symmetric around zero rather than Figure 5.4's
+    # fixed +/-2.0 range, since raw cosine-similarity differences are a
+    # much smaller, model/perturbation-dependent magnitude (typically
+    # well under +/-0.3) than standardised Cohen's d values.
+    cmap = plt.get_cmap("PuOr")
+    max_abs = max(abs(mat.min()), abs(mat.max())) * 1.1
+    norm = TwoSlopeNorm(vmin=-max_abs, vcenter=0, vmax=max_abs)
+    im = ax.imshow(mat, cmap=cmap, norm=norm, aspect="auto")
+    ax.set_xticks(range(len(col_labels)))
+    ax.set_xticklabels(col_labels, rotation=30, ha="right")
+    ax.set_yticks(range(len(row_labels)))
+    ax.set_yticklabels(row_labels, fontsize=8)
+    for i in range(mat.shape[0]):
+        for j in range(mat.shape[1]):
+            # 3 decimal places (vs. Figure 5.4's 2) since raw differences
+            # are a smaller magnitude and the dissertation's own prose
+            # cites this figure's values to 3 d.p. (e.g. "+0.215").
+            ax.text(j, i, f"{mat[i, j]:+.3f}", ha="center", va="center", fontsize=7,
+                    color=text_color_for(cmap, norm, mat[i, j]))
+    cbar = fig.colorbar(im, ax=ax, fraction=0.06, pad=0.04)
+    cbar.set_label("Mean cosine similarity difference (ACC \u2212 GDC)\npositive = ACC more stable")
+    ax.set_title(
+        "Figure 5.2b: Cosine Similarity Difference Heatmap\n(ACC \u2212 GDC) by Perturbation and Model, "
+        "Moderate Severity\n(Same units as Figure 5.2)\n"
+        + ("Option A" if option == "a" else "Option B"),
+        fontsize=10,
+    )
+    fig.tight_layout()
+    save_both_formats(fig, f"{OUT}/option_{option}_fig_5_2b_cosine_difference_heatmap")
     plt.close(fig)
 
 
@@ -659,6 +728,7 @@ def main():
     for opt in selected_options:
         cfg = configs[opt]
         fig_cosine_heatmap(opt, cfg["models_order"])
+        fig_cosine_difference_heatmap(opt, cfg["models_order"])
         fig_severity_trends(opt, cfg["models_order"])
         fig_demographic_gap_heatmap(opt, cfg["models_order"])
         fig_h4_perturbation_ranking(opt)

@@ -42,19 +42,64 @@ outlier-supplementary CSVs, and the per-model H4 breakdown below) are cited
 directly in the dissertation's tables and prose rather than plotted by this
 script.
 
-## Per-model H4 breakdown (not read by this script)
+## Per-model H4 significance testing (`14b_compute_h4_per_model.py`)
 
-`option_b_h4_per_model.csv` (51 rows: 3 models x 17 perturbations, each row
-a per-model OLS coefficient with Bonferroni-corrected significance) is
-bundled in `data/` for provenance alongside the rest of the real Phase B
-output, but is **not** read by `15_make_figures.py` as currently written.
-This file is the source for the dissertation's Figures 5.2b and 5.5b (a
-per-model breakdown of the pooled H4 mixed-effects and H2 demographic-gap
-figures this script does generate), which were produced in a separate,
-ad hoc session and are not backed by a reusable script currently held in
-this project. If that script becomes available, it belongs alongside
-`15_make_figures.py` in `scripts/04_reporting/`; until then, this gap is
-recorded here rather than silently omitted.
+`scripts/03_statistical_analysis/14b_compute_h4_per_model.py` fits a real
+significance test for each model separately, producing
+`option_{a,b}_h4_per_model.csv` (51 rows for Option B: 3 models x 17
+non-reference perturbations, each row a per-model coefficient with a real
+p-value and Bonferroni-corrected significance flag).
+
+It is built directly from `test_h4()` in `14_phase_b_statistical_analysis.py`
+(verified against that function's real source before this script was added
+to the repo, not assumed): the pooled H4 test fits one mixed-effects model
+across all models together (`cosine_similarity ~ C(perturbation_id)`, with
+`model` as a random-intercept group), which cannot say whether one model
+specifically is more or less sensitive to a given perturbation than
+another -- only the pooled, averaged effect. Because each per-model fit
+here only sees one model's own tile-level data, the random-intercept term
+is no longer needed and the fit collapses to a plain OLS regression on the
+same formula minus the grouping -- simpler and faster than the pooled
+model, with none of a mixed model's convergence risk.
+
+```bash
+python3 14b_compute_h4_per_model.py \
+    --cosine-csv /path/to/cosine_similarity.csv \
+    --option b \
+    --out-dir /path/to/output
+```
+
+Input is the raw `cosine_similarity.csv` produced by
+`10_extract_embeddings_similarity.py --mode similarity` (the same file the
+pooled H4 test in script 14 already reads) -- not the summary CSVs bundled
+in `data/`, since a significance test needs the individual tile-level
+measurements, not already-averaged numbers. `--alpha-denominator` defaults
+to 54, matching the Bonferroni threshold used everywhere else in the
+dissertation; the script prints the exact number of tests it actually ran
+(51) in case the stricter, exactly-correct 0.05/51 threshold is preferred
+instead.
+
+Validated against synthetic data before being added to this repo, not just
+taken on trust: run against a synthetic `cosine_similarity.csv` with a
+deliberately injected large negative effect on one perturbation, the script
+correctly identified that perturbation as the largest and most significant
+coefficient for every model; run against a copy missing a required column,
+it failed immediately with a clear error rather than partway through a fit.
+
+**Two things this closes only partially, documented honestly:**
+
+- `option_b_h4_per_model.csv` (bundled in `data/` since 21 Aug 2026) is the
+  source for the dissertation's Figures 5.2b and 5.5b, but `15_make_figures.py`
+  as currently written still does not read it -- the `fig_h4_perturbation_ranking_per_model()`
+  function referenced in this script's own documentation, which would add
+  significance asterisks to Figure 5.5b matching Figure 5.5's style, was
+  built in a separate ad hoc session and is not yet held in this repo. This
+  script closes the "no p-values exist yet" half of the gap; wiring
+  `15_make_figures.py` to use them remains open.
+- A companion Slurm submission script (`submit_h4_per_model.sh`, referenced
+  in this script's own usage instructions for running on the Artemis
+  cluster) has not been supplied to this repository and is not fabricated
+  here. If it becomes available, it belongs alongside this script.
 
 ## Output: 13 figures, each as PNG and SVG
 

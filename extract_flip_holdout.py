@@ -131,12 +131,15 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib.util
 import json
 import logging
+import re
 import sys
 import time
 from collections import defaultdict
 from pathlib import Path
+from types import ModuleType
 from typing import Callable, Dict, List, Optional, Tuple
 
 import h5py
@@ -145,30 +148,195 @@ import torch
 from PIL import Image, ImageOps
 from torch.utils.data import DataLoader, Dataset
 
-# ---------------------------------------------------------------------------
-# Reuse of the existing, already-validated extraction infrastructure.
-# Both modules must be importable from the same directory (or PYTHONPATH)
-# as this script on Artemis.
-# ---------------------------------------------------------------------------
-from extract_embeddings_similarity import (  # noqa: E402
-    ADAPTER_REGISTRY,
-    DEFAULT_BATCH_SIZES,
-    DEFAULT_NUM_WORKERS,
-    TILE_SIZE,
-    EmbeddingStore,
-    ModelEnvironmentError,
-    cosine_similarity_matrix_rows,
-    derive_cohort,
-    linear_cka,
-)
+LOG_FORMAT = "%(asctime)s  %(levelname)-8s  %(message)s"
+LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    stream=sys.stdout,
-)
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, datefmt=LOG_DATEFMT, stream=sys.stdout)
 log = logging.getLogger(__name__)
+
+
+def _default_log_path(args: argparse.Namespace) -> Path:
+    """Picks a mode-appropriate default log file location, next to that
+    mode's own output, so the log travels with the results it describes
+    rather than sitting only in a Slurm .out file tied to one submission.
+    Overridable with --log-file."""
+    if args.mode == "extract":
+        base = args.holdout_embeddings_dir
+        name = f"extract_flip_holdout_extract_{args.model or 'unknown_model'}.log"
+    elif args.mode == "similarity":
+        base = args.cosine_out.parent
+        name = "extract_flip_holdout_similarity.log"
+    else:  # "test"
+        base = args.stats_out.parent
+        name = "extract_flip_holdout_test.log"
+    return base / "logs" / name
+
+
+def _attach_file_logging(log_path: Path) -> None:
+    """Adds a FileHandler, in APPEND mode, alongside the existing stdout
+    handler -- both stay active, nothing is removed. Append (not
+    overwrite) matters specifically for restart resilience: if a Slurm job
+    is killed and requeued, this file accumulates the full run history
+    (original attempt, resume, any further resumes) rather than each
+    restart erasing the last one's log."""
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(log_path, mode="a", encoding="utf-8")
+    handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=LOG_DATEFMT))
+    logging.getLogger().addHandler(handler)
+
+# ---------------------------------------------------------------------------
+# Dependency resolution: extract_embeddings_similarity.py and
+# phase_b_statistical_analysis.py are loaded by explicit PATH, not by a
+# plain `import <name>` statement. This project's own pipeline scripts are
+# numbered (e.g. 14_phase_b_statistical_analysis.py) and live in stage-
+# specific directories (e.g. scripts/03_statistical_analysis/), so a bare
+# `import phase_b_statistical_analysis` would fail even when the file is
+# present, both because the filename on disk does not match the import
+# name and because a module name cannot start with a digit. Loading by
+# path via importlib sidesteps both problems and does not require this
+# script to sit in the same directory as either dependency.
+# ---------------------------------------------------------------------------
+
+# Module-level placeholders. Populated by _bind_embeddings_module() inside
+# main(), before any function below that uses them is actually called --
+# Python resolves these names from the module global namespace at CALL
+# time, not at function-definition time, so this ordering is safe.
+ADAPTER_REGISTRY: Dict[str, type] = {}
+DEFAULT_BATCH_SIZES: Dict[str, int] = {}
+DEFAULT_NUM_WORKERS: int = 8
+TILE_SIZE: int = 224
+EmbeddingStore = None            # type: ignore[assignment]
+ModelEnvironmentError = RuntimeError  # safe default; overwritten below
+cosine_similarity_matrix_rows = None  # type: ignore[assignment]
+derive_cohort = None                  # type: ignore[assignment]
+linear_cka = None                     # type: ignore[assignment]
+
+
+def _load_module_from_path(path: Path, module_name: str) -> ModuleType:
+    """Loads a Python module from an arbitrary file path, independent of
+    its on-disk filename. Standard importlib pattern for exactly this
+    situation (a numbered pipeline filename that is not a valid bare
+    import target).
+
+    The module is registered in sys.modules BEFORE exec_module() runs, not
+    after. This is not cosmetic: both extract_embeddings_similarity.py and
+    phase_b_statistical_analysis.py declare dataclasses (ImageRecord) under
+    `from __future__ import annotations`, and dataclasses resolves its
+    fields by looking up `sys.modules[cls.__module__]` while the class body
+    executes. Skipping this step raises
+    `AttributeError: 'NoneType' object has no attribute '__dict__'` at
+    import time -- confirmed by reproducing it against the real source
+    during this fix's own smoke test, not a hypothetical."""
+    if not path.exists():
+        raise FileNotFoundError(f"{module_name}: no file at {path}")
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not create an import spec for {module_name} at {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop(module_name, None)
+        raise
+    return module
+
+
+def _find_in_repo(filename: str, start: Path) -> Optional[Path]:
+    """Convenience fallback: search for a file matching `filename` under
+    the nearest ancestor directory containing a .git folder (a well-
+    defined repo-root anchor), rather than guessing arbitrarily across
+    the filesystem.
+
+    A file matches only if its name is EXACTLY `filename`, or exactly a
+    numeric prefix (with an optional trailing letter, e.g. this project's
+    own "14b_" convention) plus an underscore plus `filename`, with
+    nothing else in between -- e.g. "14_phase_b_statistical_analysis.py"
+    matches "phase_b_statistical_analysis.py".
+
+    This used to be a naive glob, f"*{filename}", which matches ANYTHING
+    ending in that string. That is too permissive: this project's own
+    scripts/03_statistical_analysis/ directory also contains
+    "12_validate_phase_b_statistical_analysis.py", a validation/test
+    script that also ends in "phase_b_statistical_analysis.py". The old
+    glob matched both files, and since "12_validate_..." sorts before
+    "14_..." alphabetically, it silently picked the WRONG file -- a file
+    with no two_sample_test() function, which surfaced as a confusing
+    AttributeError deep inside run_between_family_solarize_test() rather
+    than at dependency-resolution time. Confirmed against a real Artemis
+    run, not a hypothetical. The regex below requires the numbered prefix
+    to be followed by the target filename and nothing else, so
+    "12_validate_phase_b_statistical_analysis.py" (extra "validate_"
+    segment) is correctly excluded, while "14_phase_b_statistical_analysis.py"
+    (numeric prefix only) is correctly included.
+
+    Returns the first match (sorted, for determinism), or None if no
+    .git ancestor is found or nothing matches under it."""
+    repo_root = None
+    for ancestor in [start, *start.parents]:
+        if (ancestor / ".git").exists():
+            repo_root = ancestor
+            break
+    if repo_root is None:
+        return None
+    numbered_pattern = re.compile(r"^\d+[A-Za-z]?_" + re.escape(filename) + r"$")
+    matches = sorted(
+        p for p in repo_root.rglob("*.py")
+        if p.name == filename or numbered_pattern.match(p.name)
+    )
+    return matches[0] if matches else None
+
+
+def _resolve_dependency_path(
+    explicit: Optional[Path], filename: str, this_script: Path, cli_flag: str,
+) -> Path:
+    """Resolution order: (1) an explicit --*-module path, if given;
+    (2) an exact-name match in the same directory as this script;
+    (3) a bounded, numbering-tolerant search of the enclosing git
+    repository (matches both "filename" and "<prefix>_filename", e.g.
+    this project's numbered pipeline scripts). Raises a clear, actionable
+    error, naming every location checked and the correct CLI flag to pass
+    explicitly (`cli_flag`, e.g. "--stats-module"), if none of these find
+    the file.
+    """
+    checked = []
+    if explicit is not None:
+        checked.append(explicit)
+        if explicit.exists():
+            return explicit
+    same_dir = this_script.parent / filename
+    checked.append(same_dir)
+    if same_dir.exists():
+        return same_dir
+    found = _find_in_repo(filename, this_script.parent)
+    if found is not None:
+        return found
+    raise FileNotFoundError(
+        f"Could not locate {filename} (or a numbered variant of it, e.g. "
+        f"14_{filename}). Checked: {[str(p) for p in checked]}, and searched "
+        f"the enclosing git repository (if any) under {this_script.parent}. "
+        f"Pass its path explicitly, e.g. {cli_flag} /path/to/14_{filename}."
+    )
+
+
+def _bind_embeddings_module(explicit_path: Optional[Path]) -> None:
+    """Loads extract_embeddings_similarity.py by path and binds its public
+    names into this module's globals, so every function below that refers
+    to ADAPTER_REGISTRY, EmbeddingStore, etc. sees the real implementation
+    without needing a plain `import extract_embeddings_similarity` to
+    succeed."""
+    path = _resolve_dependency_path(
+        explicit_path, "extract_embeddings_similarity.py", Path(__file__).resolve(), "--embeddings-module"
+    )
+    mod = _load_module_from_path(path, "extract_embeddings_similarity")
+    g = globals()
+    for name in (
+        "ADAPTER_REGISTRY", "DEFAULT_BATCH_SIZES", "DEFAULT_NUM_WORKERS", "TILE_SIZE",
+        "EmbeddingStore", "ModelEnvironmentError", "cosine_similarity_matrix_rows",
+        "derive_cohort", "linear_cka",
+    ):
+        g[name] = getattr(mod, name)
+    log.info("Loaded extract_embeddings_similarity from %s", path)
 
 # ---------------------------------------------------------------------------
 # Held-out conditions. Each is a callable transform applied to a PIL image.
@@ -492,7 +660,9 @@ def run_paired_flip_test(sims: Dict[str, Dict[str, Dict[str, float]]]) -> Dict[s
     return results
 
 
-def run_between_family_solarize_test(sims: Dict[str, Dict[str, Dict[str, float]]]) -> dict:
+def run_between_family_solarize_test(
+    sims: Dict[str, Dict[str, Dict[str, float]]], stats_module_path: Optional[Path],
+) -> dict:
     """H6: between-model-family, unpaired test. Pools tile-level
     solarize-vs-baseline cosine similarity within each training family
     (DINOv2: UNI + Prov-GigaPath; CLIP: CONCH + Quilt-LLaVA) and compares
@@ -502,16 +672,27 @@ def run_between_family_solarize_test(sims: Dict[str, Dict[str, Dict[str, float]]
     Shapiro-Wilk normality check, Welch's t-test if both groups pass it,
     Mann-Whitney U otherwise -- so this test's decision procedure is
     identical to, and audited by, the same logic already validated
-    elsewhere in this study, rather than a second ad hoc rule.
+    elsewhere in this study, rather than a second ad hoc rule. Loaded by
+    explicit path (see _load_module_from_path), since the real file on
+    disk is numbered (e.g. 14_phase_b_statistical_analysis.py) and a bare
+    `import phase_b_statistical_analysis` will not find it.
     """
-    try:
-        from phase_b_statistical_analysis import two_sample_test
-    except ImportError as exc:
-        raise SystemExit(
-            "phase_b_statistical_analysis.py must be importable (same directory) "
-            "for the H6 solarize between-family test, so it reuses that module's "
-            "own validated two_sample_test() decision procedure."
-        ) from exc
+    path = _resolve_dependency_path(
+        stats_module_path, "phase_b_statistical_analysis.py", Path(__file__).resolve(), "--stats-module"
+    )
+    stats_mod = _load_module_from_path(path, "phase_b_statistical_analysis")
+    log.info("Loaded phase_b_statistical_analysis from %s", path)
+    if not hasattr(stats_mod, "two_sample_test"):
+        raise AttributeError(
+            f"The file resolved for phase_b_statistical_analysis.py ({path}) has "
+            f"no two_sample_test() function. This almost always means the wrong "
+            f"file was matched -- e.g. a validation or test script whose name "
+            f"happens to also end in 'phase_b_statistical_analysis.py' (this "
+            f"project has exactly that: 12_validate_phase_b_statistical_analysis.py "
+            f"alongside the real 14_phase_b_statistical_analysis.py). Pass the "
+            f"correct file explicitly with --stats-module to bypass the search."
+        )
+    two_sample_test = stats_mod.two_sample_test
 
     dinov2_vals, clip_vals = [], []
     for model_name in DINOV2_MODELS:
@@ -543,11 +724,11 @@ def run_between_family_solarize_test(sims: Dict[str, Dict[str, Dict[str, float]]
     return result
 
 
-def run_test(cosine_out: Path, stats_out: Path) -> None:
+def run_test(cosine_out: Path, stats_out: Path, stats_module_path: Optional[Path] = None) -> None:
     sims = _load_cosine_csv(cosine_out)
     output = {
         "H5_flip_within_model_paired": run_paired_flip_test(sims),
-        "H6_solarize_between_family": run_between_family_solarize_test(sims),
+        "H6_solarize_between_family": run_between_family_solarize_test(sims, stats_module_path),
     }
     stats_out.parent.mkdir(parents=True, exist_ok=True)
     with open(stats_out, "w", encoding="utf-8") as fh:
@@ -562,8 +743,17 @@ def run_test(cosine_out: Path, stats_out: Path) -> None:
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--mode", choices=["extract", "similarity", "test"], required=True)
-    parser.add_argument("--model", choices=list(ADAPTER_REGISTRY), default=None,
-                         help="Required for --mode extract.")
+    # NOTE: --model deliberately has no `choices=` constraint. ADAPTER_REGISTRY
+    # is empty until _bind_embeddings_module() runs below (it is populated by
+    # loading extract_embeddings_similarity.py from disk), so it cannot be
+    # used to validate CLI choices at parser-construction time. run_extraction()
+    # already raises a clear ValueError, naming the real available choices,
+    # via its own ADAPTER_REGISTRY.get(model_name) check -- so validation is
+    # not lost, only moved to after the module is loaded.
+    parser.add_argument("--model", default=None,
+                         help="Required for --mode extract. Validated against the "
+                              "real ADAPTER_REGISTRY once extract_embeddings_similarity.py "
+                              "is located; see --embeddings-module.")
     parser.add_argument("--tiles-dir", type=Path, default=Path("outputs/perturbed_tiles"))
     parser.add_argument("--baseline-embeddings-dir", type=Path, default=Path("outputs/embeddings"))
     parser.add_argument("--holdout-embeddings-dir", type=Path, default=Path("outputs/embeddings_flip_holdout"))
@@ -574,11 +764,50 @@ def main():
     parser.add_argument("--num-workers", type=int, default=DEFAULT_NUM_WORKERS)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--precision", choices=["bf16", "fp16", "fp32"], default="bf16")
+    parser.add_argument("--embeddings-module", type=Path, default=None,
+                         help="Explicit path to extract_embeddings_similarity.py. If omitted, "
+                              "this script looks in its own directory, then searches the "
+                              "enclosing git repository (tolerating a numbered filename prefix, "
+                              "e.g. 10_extract_embeddings_similarity.py). Required for --mode "
+                              "extract and --mode similarity.")
+    parser.add_argument("--stats-module", type=Path, default=None,
+                         help="Explicit path to phase_b_statistical_analysis.py (or its numbered "
+                              "variant, e.g. 14_phase_b_statistical_analysis.py), used only by "
+                              "--mode test for the H6 between-family test. Same resolution order "
+                              "as --embeddings-module if omitted.")
+    parser.add_argument("--log-file", type=Path, default=None,
+                         help="Path to a persistent log file, opened in APPEND mode (a restarted "
+                              "or requeued job adds to it rather than overwriting it). Every log "
+                              "line still also goes to stdout as before, so Slurm's own .out "
+                              "capture is unaffected -- this is in addition, not a replacement. "
+                              "Default: outputs/embeddings_flip_holdout/logs/"
+                              "extract_flip_holdout_extract_<model>.log for --mode extract "
+                              "(one file per model, since up to four run concurrently), and an "
+                              "analogous logs/ subfolder next to --cosine-out / --stats-out for "
+                              "--mode similarity / --mode test.")
     args = parser.parse_args()
+
+    log_path = args.log_file if args.log_file is not None else _default_log_path(args)
+    _attach_file_logging(log_path)
+    log.info("extract_flip_holdout.py starting: mode=%s model=%s", args.mode, args.model)
+    log.info("Logging to %s (appended, in addition to stdout).", log_path)
+
+    # extract and similarity both need ADAPTER_REGISTRY / EmbeddingStore /
+    # cosine_similarity_matrix_rows / linear_cka / derive_cohort bound in;
+    # test does not (it only needs phase_b_statistical_analysis.py, resolved
+    # separately inside run_between_family_solarize_test()).
+    if args.mode in ("extract", "similarity"):
+        _bind_embeddings_module(args.embeddings_module)
 
     if args.mode == "extract":
         if args.model is None:
             parser.error("--model is required for --mode extract")
+        if args.model not in ADAPTER_REGISTRY:
+            parser.error(
+                f"--model '{args.model}' is not in ADAPTER_REGISTRY "
+                f"(available: {sorted(ADAPTER_REGISTRY)}). Check --embeddings-module "
+                f"points at the right file."
+            )
         run_extraction(
             model_name=args.model, tiles_dir=args.tiles_dir,
             holdout_embeddings_dir=args.holdout_embeddings_dir,
@@ -592,7 +821,7 @@ def main():
             cosine_out=args.cosine_out, cka_out=args.cka_out,
         )
     elif args.mode == "test":
-        run_test(cosine_out=args.cosine_out, stats_out=args.stats_out)
+        run_test(cosine_out=args.cosine_out, stats_out=args.stats_out, stats_module_path=args.stats_module)
 
 
 if __name__ == "__main__":

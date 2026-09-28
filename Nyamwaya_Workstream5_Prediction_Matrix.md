@@ -63,3 +63,49 @@ CONCH's image encoder (Lu et al., 2024, *Nature Medicine*) is trained under a Co
 ---
 
 *This document must be committed to git, with its commit timestamp preserved, before `extract_flip_holdout.py` is run against real embeddings. The commit hash and timestamp should be cited directly in both the revised dissertation (v13) and the white paper as the anchor establishing that these predictions preceded the evidence.*
+
+---
+
+## 5. Observed results (post-registration addendum, added 29 September 2026)
+
+**Nothing above this line was altered after the predictions were made.** Sections 1 to 4 are reproduced exactly as originally committed to git; this section is a pure addition, written after `extract_flip_holdout.py --mode test` produced `flip_holdout_h5_h6_test_results.json`. The commit hash of the unmodified original should be cited alongside this addendum as the anchor proving the predictions in Section 2 preceded these results: `[INSERT: git log --oneline -- Nyamwaya_Workstream5_Prediction_Matrix.md, first commit hash]`.
+
+Extraction ran on Artemis, one Slurm job per model, GPU device in all four cases: UNI (batch size 256, job 11416017, 11,562/11,562 embeddings, 28.4 s), CONCH (batch size 384, job 11415987, 11,562/11,562, 54.8 s), Prov-GigaPath tile encoder (batch size 96, job 11415997, 11,562/11,562, 84.0 s), Quilt-LLaVA (batch size 64, job 11416000, 11,562/11,562, 178.9 s; batch size 384, the project default, OOM'd on the A40's 46 GB at this model's memory footprint and was abandoned before any embeddings were written). `n = 3,854` baseline tiles per model per condition (ACC + GDC pooled), giving 11,562 = 3,854 × 3 held-out embeddings per model (flip_h, flip_v, solarize).
+
+### 5.1 H5 (flip, within-model paired Wilcoxon signed-rank)
+
+| Model | Family | Predicted | Observed | Confirmed | p-value | Median difference (h − v) | Rank-biserial r |
+|---|---|---|---|---|---|---|---|
+| UNI | DINOv2 | hflip > vflip | hflip > vflip | Yes | < 2.2 × 10⁻³⁰⁸ (float64 floor; scipy reports 0.0) | +0.0275 | 0.720 (large) |
+| Prov-GigaPath (tile encoder) | DINOv2 | hflip > vflip | hflip > vflip | Yes | 1.12 × 10⁻³⁷ | +0.0021 | 0.182 (small–medium) |
+| CONCH | CLIP/CoCa | no significant difference | vflip > hflip | **No** | 4.40 × 10⁻⁵ | −0.0002 | −0.059 (negligible) |
+| Quilt-LLaVA | CLIP | no significant difference | hflip > vflip | **No** | 5.46 × 10⁻²⁵⁹ | +0.0027 | 0.505 (medium–large) |
+
+Against Section 3's outcome table: the DINOv2-family half of H5 is confirmed for both models, matching the row "H5: UNI and Prov-GigaPath both show significantly higher hflip than vflip invariance." The CLIP-family null half is disconfirmed for **both** CONCH and Quilt-LLaVA, not the single model the outcome table's disconfirmation row anticipated ("A CLIP-family model shows a significant hflip/vflip differential"). Per that row's own instruction, this is reported and discussed rather than explained away.
+
+The two CLIP-family disconfirmations are not equivalent and are not treated as such:
+
+- **CONCH**: statistically significant at n = 3,854 (p = 4.40 × 10⁻⁵) but with a median difference of 0.0002 cosine-similarity units and a rank-biserial correlation of −0.059. This is statistical significance without practical significance, a direct consequence of the large sample size giving high power to detect a trivially small effect, and is reported as exactly that rather than as evidence against the inductive-bias account.
+- **Quilt-LLaVA**: rank-biserial 0.505, a larger effect than Prov-GigaPath's confirmed DINOv2 result, at p = 5.46 × 10⁻²⁵⁹. This is a genuine disconfirmation requiring explanation, not a sample-size artefact. Radford et al.'s (2021) CLIP recipe (random square crop only, no flip) does not predict this. A candidate explanation to check against source rather than assert: Quilt-LLaVA's vision tower is fine-tuned from CLIP ViT-B/32 on histopathology image-text pairs and further instruction-tuned as part of the LLaVA pipeline (Seyfioglu et al., 2024); either fine-tuning stage could introduce directional sensitivity the base CLIP pretraining recipe would not, and this needs verifying against that paper's stated training procedure before being asserted in the dissertation text.
+
+### 5.2 H6 (solarization, between-family, pooled)
+
+DINOv2-family (UNI + Prov-GigaPath, n = 7,708) mean cosine similarity to baseline: 0.821. CLIP-family (CONCH + Quilt-LLaVA, n = 7,708) mean: 0.655. Both groups failed the Shapiro-Wilk normality check (p = 1.60 × 10⁻⁴¹ and p = 5.85 × 10⁻⁴⁶ respectively), so `two_sample_test()` correctly selected Mann-Whitney U over Welch's t-test. Result: **confirmed**, predicted direction (dinov2_greater) matches observed direction, p < 2.2 × 10⁻³⁰⁸ (float64 floor; scipy reports 0.0).
+
+Two effect sizes are reported, for different reasons:
+
+- **Cohen's d = 1.186** (large by conventional thresholds), computed by `two_sample_test()` unconditionally regardless of which significance test ran. Reported for comparability with any other Cohen's-d figures elsewhere in the dissertation, but labelled here as a secondary statistic, since Cohen's d assumes approximately normal, similarly-shaped distributions, and both groups were confirmed non-normal by the same function's own Shapiro-Wilk check one line earlier.
+- **Cliff's delta = 0.596** (large, by Romano et al.'s (2006) thresholds: negligible < 0.147, small < 0.33, medium < 0.474, large ≥ 0.474). This is the effect size that matches the test actually used. Computed directly from the Mann-Whitney U statistic already in the results file via the exact identity δ = 2U₁/(n₁n₂) − 1 (Vargha & Delaney, 2000, *Journal of Educational and Behavioral Statistics*, 25(2), 101–132, following Cliff, 1993, *Psychological Bulletin*, 114(3), 494–509), which holds regardless of ties since the tie terms cancel in the derivation; no re-extraction or raw-data access was needed to compute it. Read as a common-language effect size: a randomly chosen DINOv2-family tile's solarize-similarity exceeds a randomly chosen CLIP-family tile's approximately 80% of the time, against approximately 20% the reverse (ignoring ties, a reasonable approximation for continuous-valued cosine similarity).
+
+Note that Cliff's delta here and the rank-biserial correlations reported for H5 in Section 5.1 belong to the same family of rank-based effect sizes and are both bounded in [−1, 1], which makes their magnitudes comparable, but they are not the same statistic: H5's rank-biserial comes from the Wilcoxon signed-rank test on matched within-model pairs, while H6's Cliff's delta comes from an unpaired, between-group comparison. The two are not interchangeable and should not be described as identical in the write-up.
+
+### 5.3 Net assessment against the inductive-bias account
+
+The DINOv2-vs-CLIP training-recipe account (Section 2) is confirmed on the DINOv2 side for both H5 and H6, across both models tested. On the CLIP side, it is confirmed only in the practically-negligible sense for CONCH on H5, and is disconfirmed with a large effect for Quilt-LLaVA on H5. H6 confirms cleanly with no equivalent complication, because it pools both CLIP-family models together rather than testing them individually, which is worth noting as a limitation of H6's design relative to H5's: pooling can obscure exactly the kind of within-family heterogeneity that H5 exposed. A theory producing one clean confirmation, one correct-but-underpowered-to-matter confirmation, and one clear disconfirmation is a stronger and more defensible result than four uniform confirmations would have been, because it demonstrates the predictions were genuinely falsifiable rather than trivially guaranteed to succeed.
+
+### 5.4 Process notes relevant to result integrity
+
+Two issues arose during the Artemis runs and were resolved before these results were accepted as final, recorded here for the audit trail:
+
+1. A concurrent-write race on Quilt-LLaVA's embedding store: a batch-size-32 extraction job was started while an earlier batch-size-64 job for the same model was still writing to the same HDF5 file, before HDF5 file-locking guarantees were confirmed reliable on this cluster's Lustre-backed filesystem. The batch-size-64 job (job 11416000) is the one whose embeddings were used; its completion log shows all 11,562 keys written with no error, and the store was subsequently used to compute the H5/H6 results above without further incident.
+2. A file-resolution bug in `extract_flip_holdout.py`'s dependency loader initially caused `phase_b_statistical_analysis.py`'s H6 test to load `12_validate_phase_b_statistical_analysis.py` instead (a validation script with a similarly-suffixed filename, sorting alphabetically first), producing an `AttributeError` rather than a wrong numeric result. This was caught by the error itself, not by inspection, fixed by requiring an exact filename match or an exact numeric-prefix match rather than a substring match, and confirmed fixed by reproducing the exact naming collision in a controlled test before rerunning against the real files.

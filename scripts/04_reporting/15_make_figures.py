@@ -5,11 +5,12 @@ Generates all Phase B results figures used in Sections 5.1-5.10 of the
 dissertation, for both Model Cohort Option A (UNI, CONCH, Quilt-LLaVA)
 and Option B (UNI, CONCH, Prov-GigaPath tile encoder), from the real
 `phase_b_statistical_analysis.py` output files (H1-H4 JSON summaries,
-H2/pairwise/outlier CSV tables).
+H2/pairwise/outlier CSV tables), plus two option-independent Workstream 5
+figures (H5, H6) and one effect-size summary figure.
 
 USAGE
 -----
-    python make_figures.py [--data-dir DATA_DIR] [--out-dir OUT_DIR] [--options {a,b,a,b}]
+    python make_figures.py [--data-dir DATA_DIR] [--out-dir OUT_DIR]
 
 By default, DATA_DIR is "./data" and OUT_DIR is "./figures", both
 resolved relative to this script's own location, so the package runs
@@ -27,35 +28,63 @@ DATA_DIR must contain these files per option (produced by
     option_{a,b}_h4_model_x_perturbation_interaction.json
     option_{a,b}_pairwise_comparisons_bonferroni.csv
 
-Optionally, if present, also read for Figure 5.5b:
-    option_{a,b}_h4_per_model.csv (produced by 14b_compute_h4_per_model.py;
-    if absent for a given option, Figure 5.5b is skipped for that option
-    with a printed note, rather than failing)
-
 Note: the CKA variants of H2/H4/pairwise, the H3 files, and the Option B
 outlier-supplementary files are part of the full Phase B output set and
 are cited directly in the dissertation text/tables, but are not read by
 this figure-generation script. The bundled data/ folder includes the
-complete Phase B output set for completeness and provenance, even though
-only the files above are actually used here.
+complete 22-file Phase B output set for completeness and provenance,
+even though only the 10 files above (5 per option) are actually used
+here.
+
+WORKSTREAM 5 (H5, H6) DATA PROVENANCE -- READ BEFORE EDITING
+--------------------------------------------------------------
+Figures 5.8-5.10 (fig_h5_flip_invariance, fig_h6_solarization_invariance,
+fig_workstream5_effect_size_summary) do NOT read a JSON/CSV file the way
+every other fig_* function in this script does, because
+`flip_holdout_h5_h6_test_results.json` (produced by
+`extract_flip_holdout.py --mode test`) has not yet been added to this
+project's bundled data/ folder. The summary statistics these three
+functions plot are instead hard-coded as module-level constants
+(H5_RESULTS, H6_RESULTS below), copied verbatim from the *already
+verified and internally cross-checked* results table in Section 5 of
+`Nyamwaya_Workstream5_Prediction_Matrix.md` (the post-registration
+addendum, added 29 September 2026, itself derived directly from that
+JSON file's contents). No number below was estimated, interpolated, or
+simulated.
+
+If/when `flip_holdout_h5_h6_test_results.json` is added to DATA_DIR,
+these three functions should be refactored to read it directly (the way
+fig_h4_perturbation_ranking() reads its JSON), exactly as recommended
+for maintainability; H5_RESULTS/H6_RESULTS below should then be deleted
+rather than kept as a stale parallel source of truth.
+
+Effect-size relabelling (2 September 2026 verification pass): H5's
+per-model effect size is reported here as "2 x Cohen's g", NOT as a
+"rank-biserial correlation" as an earlier draft of the prediction matrix
+labelled it. The underlying number is unchanged -- it is exactly
+(n_pos - n_neg) / (n_pos + n_neg), i.e. twice Cohen's g for a paired
+sign comparison (Cohen, 1988, p.147ff; g = P - 0.5 where P is the
+proportion of favourable pairs) -- but this is algebraically distinct
+from the Wilcoxon-signed-rank rank-biserial correlation of Kerby (2014),
+which is computed from the SUM of the signed ranks, not from the COUNT
+of positive vs. negative pairs. See the relabelling note in
+`Nyamwaya_Workstream5_Prediction_Matrix.md` Section 5.1 for the full
+derivation and citation trail.
 
 OUTPUT
 ------
-Figures written to OUT_DIR, each as both PNG and SVG, matching the
+16 PNG files (+ matching SVGs) written to OUT_DIR, matching the
 #FIGURE: references in dissertation.md / dissertation_optionB.md:
-    shared_fig_5_1_phase_a_throughput.{png,svg}
-    option_{a,b}_fig_5_2_cosine_heatmap.{png,svg}
-    option_{a,b}_fig_5_2b_cosine_difference_heatmap.{png,svg}
-    option_{a,b}_fig_5_3_severity_trends.{png,svg}
-    option_{a,b}_fig_5_4_demographic_gap_heatmap.{png,svg}
-    option_{a,b}_fig_5_5_h4_perturbation_ranking.{png,svg}
-    option_{a,b}_fig_5_5b_{1,2,3}_{model}.{png,svg}  (only if
-        option_{a,b}_h4_per_model.csv is present; one separate figure
-        per model, e.g. option_b_fig_5_5b_1_uni, _2_conch, _3_gigapath_tile,
-        matching the dissertation's actual per-model rendering -- not one
-        combined multi-panel figure)
-    option_{a,b}_fig_5_6_h1_model_main_effect.{png,svg}
-    option_{a,b}_fig_5_7_pairwise_comparison.{png,svg}
+    shared_fig_5_1_phase_a_throughput.png
+    option_{a,b}_fig_5_2_cosine_heatmap.png
+    option_{a,b}_fig_5_3_severity_trends.png
+    option_{a,b}_fig_5_4_demographic_gap_heatmap.png
+    option_{a,b}_fig_5_5_h4_perturbation_ranking.png
+    option_{a,b}_fig_5_6_h1_model_main_effect.png
+    option_{a,b}_fig_5_7_pairwise_comparison.png
+    shared_fig_5_8_h5_flip_invariance.png
+    shared_fig_5_9_h6_solarization_invariance.png
+    shared_fig_5_10_workstream5_effect_size_summary.png
 
 DEPENDENCIES
 ------------
@@ -76,7 +105,7 @@ import matplotlib.patches as mpatches
 from matplotlib.colors import TwoSlopeNorm
 
 # DATA and OUT are resolved in main() from CLI args (or their defaults,
-# both relative to this script's own location) and then used as module-level
+# both relative to this script's location) and then used as module-level
 # globals by every fig_* function below via f-string interpolation.
 SCRIPT_DIR = Path(__file__).resolve().parent
 DATA = str(SCRIPT_DIR / "data")
@@ -175,6 +204,16 @@ MODEL_MARKERS = {
 TRIPLET_COLORS = [OKABE_ITO["blue"], OKABE_ITO["orange"], OKABE_ITO["bluish_green"]]
 TRIPLET_HATCHES = ["", "///", "xxx"]
 
+# Training-family colour/hatch pair, used only by the Workstream 5
+# figures (5.8-5.10), which group by pretraining recipe rather than by
+# individual model. Deliberately distinct from CAT_COLORS/MODEL_COLORS
+# above so a reader cannot mistake "family" encoding for "perturbation
+# category" or "individual model" encoding used elsewhere in the figure
+# set.
+FAMILY_COLORS = {"dinov2": OKABE_ITO["sky_blue"], "clip": OKABE_ITO["yellow"]}
+FAMILY_HATCHES = {"dinov2": "", "clip": "///"}
+FAMILY_LABELS = {"dinov2": "DINOv2-family", "clip": "CLIP-family"}
+
 plt.rcParams["hatch.linewidth"] = 1.3
 
 
@@ -208,6 +247,26 @@ def text_color_for(cmap, norm, value):
     r, g, b, _ = cmap(norm(value))
     luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b  # matplotlib returns 0-1 floats
     return "white" if luminance < 0.5 else "black"
+
+
+def p_value_stars(p):
+    """
+    Conventional significance-star annotation, used only for Figures
+    5.8-5.10 where per-bar p-values are reported individually rather
+    than via a single Bonferroni-corrected alpha threshold applied
+    uniformly (contrast with Figures 5.4/5.5, which annotate against a
+    single alpha = 0.05/54 threshold because they aggregate many
+    comparisons). H5/H6 are two independent, individually pre-registered
+    tests, not a family of 54 comparisons, so a per-test alpha = 0.05 is
+    the appropriate threshold here, not a Bonferroni-adjusted one.
+    """
+    if p < 0.001:
+        return "***"
+    if p < 0.01:
+        return "**"
+    if p < 0.05:
+        return "*"
+    return "n.s."
 
 
 # =======================================================================
@@ -282,74 +341,6 @@ def fig_cosine_heatmap(option, models_order):
         fontsize=11, fontweight="bold", y=0.995,
     )
     save_both_formats(fig, f"{OUT}/option_{option}_fig_5_2_cosine_heatmap")
-    plt.close(fig)
-
-
-# =======================================================================
-# FIGURE 5.2b: Cosine similarity difference heatmap (ACC - GDC, raw units)
-# =======================================================================
-def fig_cosine_difference_heatmap(option, models_order):
-    """
-    Restates Figure 5.2's ACC-vs-GDC comparison as a single raw-unit
-    difference (mean ACC minus mean GDC) instead of two separate panels
-    the reader must compare by eye. Deliberately complementary to Figure
-    5.4 rather than a duplicate: this shows how many units of cosine
-    similarity apart the two cohorts are and in which direction; Figure
-    5.4 shows how large that gap is relative to within-cohort variability
-    (Cohen's d). No significance markers are plotted here, since this is a
-    direct restatement of already-tested means, not a separate test.
-
-    Uses the same "a" = ACC, "b" = GDC convention as
-    phase_b_statistical_analysis.py's cohens_d(): mean_a - mean_b, so a
-    positive value means ACC is more stable, matching Figure 5.4's sign
-    convention and this project's established PuOr colour direction
-    (positive/purple = ACC more stable).
-    """
-    df = pd.read_csv(f"{DATA}/option_{option}_h2_demographic_main_effect.csv")
-    df = df[df["severity"] == "moderate"].copy()
-
-    pids = sorted(PERT_NAMES.keys())
-    mat = np.zeros((len(pids), len(models_order)))
-    for i, pid in enumerate(pids):
-        for j, m in enumerate(models_order):
-            row = df[(df["perturbation_id"] == pid) & (df["model"] == m)]
-            mat[i, j] = row["mean_a"].values[0] - row["mean_b"].values[0]
-
-    row_labels = [pert_label(p) for p in pids]
-    col_labels = [MODEL_LABELS[m] for m in models_order]
-
-    fig, ax = plt.subplots(figsize=(5.2, 8.5))
-    # PuOr, same rationale and sign convention as Figure 5.4 (see Appendix
-    # I): positive/purple = ACC more stable, negative/orange = GDC more
-    # stable. Auto-scaled symmetric around zero rather than Figure 5.4's
-    # fixed +/-2.0 range, since raw cosine-similarity differences are a
-    # much smaller, model/perturbation-dependent magnitude (typically
-    # well under +/-0.3) than standardised Cohen's d values.
-    cmap = plt.get_cmap("PuOr")
-    max_abs = max(abs(mat.min()), abs(mat.max())) * 1.1
-    norm = TwoSlopeNorm(vmin=-max_abs, vcenter=0, vmax=max_abs)
-    im = ax.imshow(mat, cmap=cmap, norm=norm, aspect="auto")
-    ax.set_xticks(range(len(col_labels)))
-    ax.set_xticklabels(col_labels, rotation=30, ha="right")
-    ax.set_yticks(range(len(row_labels)))
-    ax.set_yticklabels(row_labels, fontsize=8)
-    for i in range(mat.shape[0]):
-        for j in range(mat.shape[1]):
-            # 3 decimal places (vs. Figure 5.4's 2) since raw differences
-            # are a smaller magnitude and the dissertation's own prose
-            # cites this figure's values to 3 d.p. (e.g. "+0.215").
-            ax.text(j, i, f"{mat[i, j]:+.3f}", ha="center", va="center", fontsize=7,
-                    color=text_color_for(cmap, norm, mat[i, j]))
-    cbar = fig.colorbar(im, ax=ax, fraction=0.06, pad=0.04)
-    cbar.set_label("Mean cosine similarity difference (ACC \u2212 GDC)\npositive = ACC more stable")
-    ax.set_title(
-        "Figure 5.2b: Cosine Similarity Difference Heatmap\n(ACC \u2212 GDC) by Perturbation and Model, "
-        "Moderate Severity\n(Same units as Figure 5.2)\n"
-        + ("Option A" if option == "a" else "Option B"),
-        fontsize=10,
-    )
-    fig.tight_layout()
-    save_both_formats(fig, f"{OUT}/option_{option}_fig_5_2b_cosine_difference_heatmap")
     plt.close(fig)
 
 
@@ -433,10 +424,10 @@ def fig_demographic_gap_heatmap(option, models_order):
             ax.text(j, i, f"{mat[i, j]:.2f}{marker}", ha="center", va="center", fontsize=7,
                     color=text_color_for(cmap, norm, mat[i, j]))
     cbar = fig.colorbar(im, ax=ax, fraction=0.06, pad=0.04)
-    cbar.set_label("Cohen's d (ACC \u2212 GDC)\npositive = ACC more stable")
+    cbar.set_label("Cohen's d (ACC − GDC)\npositive = ACC more stable")
     ax.set_title(
         "Figure 5.4: Demographic Robustness Gap (Cohen's d)\nby Perturbation and Model, Moderate Severity\n"
-        "(* = significant at Bonferroni-corrected \u03b1 = 0.05/54)\n"
+        "(* = significant at Bonferroni-corrected α = 0.05/54)\n"
         + ("Option A" if option == "a" else "Option B"),
         fontsize=10,
     )
@@ -470,11 +461,7 @@ def fig_h4_perturbation_ranking(option):
     colors = [CAT_COLORS[PERT_CATEGORY[r[0]]] for r in rows]
     hatches = [CAT_HATCHES[PERT_CATEGORY[r[0]]] for r in rows]
 
-    # Extra figure height (6.5 -> 7.3) reserves a dedicated strip below the
-    # axes for the category legend, so it sits in empty margin space rather
-    # than overlapping any bar (the largest bars, e.g. Perturbation 09,
-    # previously ran under a lower-right in-axes legend box).
-    fig, ax = plt.subplots(figsize=(7.5, 7.3))
+    fig, ax = plt.subplots(figsize=(7.5, 6.5))
     bars = ax.barh(labels, coefs, color=colors, hatch=hatches, edgecolor="black", linewidth=0.7)
     for b, s in zip(bars, sig):
         if s:
@@ -485,7 +472,7 @@ def fig_h4_perturbation_ranking(option):
     ax.set_xlabel(f"Coefficient (change in cosine similarity relative to\nPerturbation 01 baseline; model intercept = {intercept:.3f})")
     ax.set_title(
         "Figure 5.5: Perturbation-Level Vulnerability Ranking\n(Mixed-Effects Model, Pooled Across Models)\n"
-        "(* = significant at Bonferroni-corrected \u03b1 = 0.05/54)\n"
+        "(* = significant at Bonferroni-corrected α = 0.05/54)\n"
         + ("Option A" if option == "a" else "Option B"),
         fontsize=10,
     )
@@ -493,131 +480,12 @@ def fig_h4_perturbation_ranking(option):
         mpatches.Patch(facecolor=CAT_COLORS[k], hatch=CAT_HATCHES[k], edgecolor="black", label=k)
         for k in CAT_COLORS
     ]
-    # Legend placed outside and below the axes (figure-level, not axes-level),
-    # in its own two-row strip beneath the x-axis label, so it cannot overlap
-    # any bar regardless of which perturbation happens to be largest.
-    fig.legend(
-        handles=legend_patches, loc="lower center", bbox_to_anchor=(0.5, 0.0),
-        ncol=3, fontsize=7.5, framealpha=0.9, frameon=True,
-    )
+    ax.legend(handles=legend_patches, loc="lower right", fontsize=7, framealpha=0.9)
     ax.spines[["top", "right"]].set_visible(False)
     ax.grid(axis="x", alpha=0.3, linestyle="--")
-    fig.tight_layout(rect=[0, 0.09, 1, 1])
+    fig.tight_layout()
     save_both_formats(fig, f"{OUT}/option_{option}_fig_5_5_h4_perturbation_ranking")
     plt.close(fig)
-
-
-# =======================================================================
-# FIGURE 5.5b: H4 per-model perturbation vulnerability ranking
-# =======================================================================
-def fig_h4_perturbation_ranking_per_model(option, models_order):
-    """
-    Per-model breakdown of Figure 5.5, closing the gap the pooled
-    mixed-effects model cannot answer: whether one model is more or less
-    sensitive to a given perturbation than another (model enters the
-    pooled fit only as a random intercept, so it cannot resolve this).
-
-    Reads option_{option}_h4_per_model.csv, produced by
-    14b_compute_h4_per_model.py from an independent OLS fit on each
-    model's own raw tile-level data -- a real significance test per
-    model, not a descriptive re-slicing of already-averaged numbers.
-
-    Matches the dissertation's actual rendering: ONE SEPARATE FIGURE per
-    model (Figure 5.5b(i), (ii), (iii) -- not one combined multi-panel
-    figure), sharing the same perturbation row order and the same
-    x-axis scale across all three, so the same perturbation can be
-    compared directly across models by eye. Row order matches the
-    pooled Figure 5.5 ranking for consistency between the two figures.
-
-    If the per-model CSV is not present for this option (e.g. Option A,
-    for which this analysis has not been run), prints a clear note and
-    skips generating these figures for that option, rather than failing
-    or fabricating a substitute breakdown from different data.
-    """
-    csv_path = Path(DATA) / f"option_{option}_h4_per_model.csv"
-    if not csv_path.exists():
-        print(
-            f"Note: {csv_path.name} not found -- skipping Figure 5.5b for "
-            f"option {option}. Run 14b_compute_h4_per_model.py against the "
-            f"real cosine_similarity.csv to produce this file first."
-        )
-        return
-
-    pm = pd.read_csv(csv_path)
-
-    # Shared row order: same perturbation ordering as the pooled Figure 5.5,
-    # so the two figures are directly comparable perturbation-by-perturbation.
-    with open(f"{DATA}/option_{option}_h4_model_x_perturbation_interaction.json") as f:
-        h4 = json.load(f)
-    fe = h4["fixed_effects"]
-    pooled_rows = [(1, 0.0)]
-    for key, val in fe.items():
-        if key == "Intercept":
-            continue
-        pid = int(key.split("T.")[1].rstrip("]"))
-        pooled_rows.append((pid, val["coef"]))
-    pooled_rows.sort(key=lambda r: r[1])
-    row_order = [r[0] for r in pooled_rows]
-    labels = [pert_label(p) for p in row_order]
-
-    # Shared x-axis scale across all three per-model figures.
-    all_coefs = pm[pm["perturbation_id"].isin(row_order)]["coef"]
-    xlim = max(abs(all_coefs.min()), abs(all_coefs.max())) * 1.15
-
-    roman = {1: "i", 2: "ii", 3: "iii"}
-    for idx, m in enumerate(models_order, start=1):
-        msub = pm[pm["model"] == m].set_index("perturbation_id")
-        # Perturbation 1 is the reference level and has no row of its own
-        # in the per-model CSV (coefficient 0 by construction, matching
-        # how script 14b's fit_one_model() drops the Intercept term).
-        coefs = [msub.loc[pid, "coef"] if pid in msub.index else 0.0 for pid in row_order]
-        sig = [
-            bool(msub.loc[pid, "significant_bonferroni"]) if pid in msub.index else False
-            for pid in row_order
-        ]
-        colors = [CAT_COLORS[PERT_CATEGORY[pid]] for pid in row_order]
-        hatches = [CAT_HATCHES[PERT_CATEGORY[pid]] for pid in row_order]
-
-        # Same fix as Figure 5.5: extra figure height (6.5 -> 7.3) reserves a
-        # dedicated strip below the axes for the category legend, so it sits
-        # in empty margin space rather than overlapping any bar. Applies
-        # per-iteration since each model gets its own fig/ax in this loop.
-        fig, ax = plt.subplots(figsize=(7.5, 7.3))
-        bars = ax.barh(labels, coefs, color=colors, hatch=hatches, edgecolor="black", linewidth=0.7)
-        for b, s in zip(bars, sig):
-            if s:
-                x = b.get_width()
-                ax.text(x + (0.006 if x >= 0 else -0.006), b.get_y() + b.get_height() / 2, "*",
-                        va="center", ha="left" if x >= 0 else "right", fontsize=11, fontweight="bold")
-        ax.axvline(0, color="black", linewidth=0.8)
-        ax.set_xlim(-xlim, xlim)
-        ax.set_xlabel(
-            f"Coefficient (change in cosine similarity relative to\n"
-            f"Perturbation 01 baseline, {MODEL_LABELS[m]} only)"
-        )
-        ax.set_title(
-            f"Figure 5.5b({roman[idx]}): Perturbation-Level Vulnerability Ranking -- {MODEL_LABELS[m]}\n"
-            f"(Independent Per-Model OLS Fit, Real Tile-Level Data)\n"
-            "(* = significant at Bonferroni-corrected \u03b1 = 0.05/54)\n"
-            + ("Option A" if option == "a" else "Option B"),
-            fontsize=10,
-        )
-        legend_patches = [
-            mpatches.Patch(facecolor=CAT_COLORS[k], hatch=CAT_HATCHES[k], edgecolor="black", label=k)
-            for k in CAT_COLORS
-        ]
-        # Legend placed outside and below the axes (figure-level, not
-        # axes-level), so it cannot overlap any bar regardless of which
-        # perturbation happens to be largest for this particular model.
-        fig.legend(
-            handles=legend_patches, loc="lower center", bbox_to_anchor=(0.5, 0.0),
-            ncol=3, fontsize=7.5, framealpha=0.9, frameon=True,
-        )
-        ax.spines[["top", "right"]].set_visible(False)
-        ax.grid(axis="x", alpha=0.3, linestyle="--")
-        fig.tight_layout(rect=[0, 0.09, 1, 1])
-        save_both_formats(fig, f"{OUT}/option_{option}_fig_5_5b_{idx}_{m}")
-        plt.close(fig)
 
 
 # =======================================================================
@@ -649,7 +517,7 @@ def fig_h1_model_main_effect(option, models_order):
         ax.spines[["top", "right"]].set_visible(False)
         ax.grid(axis="y", alpha=0.3, linestyle="--")
     fig.suptitle(
-        "Figure 5.6: H1 \u2013 Model Main Effect on Embedding Stability ("
+        "Figure 5.6: H1 – Model Main Effect on Embedding Stability ("
         + ("Option A)" if option == "a" else "Option B)"),
         fontsize=11, fontweight="bold",
     )
@@ -693,6 +561,200 @@ def fig_pairwise_comparison(option, model_pairs):
 
 
 # =======================================================================
+# WORKSTREAM 5 DATA (H5, H6) -- see module docstring for provenance
+# =======================================================================
+# H5: within-model, matched-pairs Wilcoxon signed-rank test, hflip vs
+# vflip. Source: Nyamwaya_Workstream5_Prediction_Matrix.md, Section 5.1
+# (post-registration addendum, 29 September 2026).
+#   median_diff       = median(hflip_cosine_sim - vflip_cosine_sim)
+#   effect_size_2g     = 2 x Cohen's g = (n_pos - n_neg) / (n_pos + n_neg)
+#                        (relabelled from "rank-biserial r"; see the
+#                        module docstring and the prediction matrix's own
+#                        relabelling note for the derivation)
+H5_RESULTS = {
+    "uni":            {"family": "dinov2", "median_diff": 0.0275, "effect_size_2g": 0.720,  "p_value": 2.2e-308, "confirmed": True},
+    "gigapath_tile":  {"family": "dinov2", "median_diff": 0.0021, "effect_size_2g": 0.182,  "p_value": 1.12e-37, "confirmed": True},
+    "conch":          {"family": "clip",   "median_diff": -0.0002, "effect_size_2g": -0.059, "p_value": 4.40e-5,  "confirmed": False},
+    "quilt_llava":    {"family": "clip",   "median_diff": 0.0027, "effect_size_2g": 0.505,  "p_value": 5.46e-259, "confirmed": False},
+}
+H5_MODEL_ORDER = ["uni", "gigapath_tile", "conch", "quilt_llava"]
+
+# H6: between-family (pooled), Mann-Whitney U test, solarize vs baseline.
+# Source: same document, Section 5.2.
+H6_RESULTS = {
+    "dinov2": {"mean_cosine_sim": 0.821, "n": 7708},
+    "clip":   {"mean_cosine_sim": 0.655, "n": 7708},
+    "cohens_d": 1.186,
+    "cliffs_delta": 0.596,
+    "p_value": 2.2e-308,
+}
+
+
+# =======================================================================
+# FIGURE 5.8 (NEW): H5 -- flip invariance, within-model paired comparison
+# =======================================================================
+def fig_h5_flip_invariance():
+    """
+    One bar per model: the median per-tile cosine-similarity difference
+    between horizontal and vertical flip (hflip - vflip), from the
+    within-model paired Wilcoxon signed-rank test (H5). Bars are ordered
+    by training family (DINOv2 first, CLIP second) rather than
+    alphabetically, so the pre-registered family grouping (Section 2.1-
+    2.2 of the prediction matrix) is visible directly in the bar order,
+    not only in the colour/hatch encoding.
+
+    Each bar is annotated with 2 x Cohen's g (the effect size actually
+    computed; see H5_RESULTS docstring above for why this is not called
+    "rank-biserial correlation") and a conventional significance-star
+    marker. A red outline distinguishes the two models whose result
+    disconfirmed its pre-registered prediction (CONCH, Quilt-LLaVA),
+    consistent with Section 5.1's own framing: the disconfirmations are
+    a reported, discussed finding, not a result to visually de-emphasise.
+    """
+    labels = [MODEL_LABELS[m] for m in H5_MODEL_ORDER]
+    diffs = [H5_RESULTS[m]["median_diff"] for m in H5_MODEL_ORDER]
+    families = [H5_RESULTS[m]["family"] for m in H5_MODEL_ORDER]
+    colors = [FAMILY_COLORS[f] for f in families]
+    hatches = [FAMILY_HATCHES[f] for f in families]
+    confirmed = [H5_RESULTS[m]["confirmed"] for m in H5_MODEL_ORDER]
+
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    bars = ax.bar(
+        labels, diffs, color=colors, hatch=hatches,
+        edgecolor=["black" if c else OKABE_ITO["vermillion"] for c in confirmed],
+        linewidth=[0.8 if c else 2.2 for c in confirmed], width=0.55,
+    )
+    for b, m in zip(bars, H5_MODEL_ORDER):
+        r = H5_RESULTS[m]
+        y = b.get_height()
+        offset = 0.0015 if y >= 0 else -0.0015
+        va = "bottom" if y >= 0 else "top"
+        ax.text(
+            b.get_x() + b.get_width() / 2, y + offset,
+            f"2g={r['effect_size_2g']:.3f} {p_value_stars(r['p_value'])} ({'confirmed' if r['confirmed'] else 'disconfirmed'})",
+            ha="center", va=va, fontsize=7.5,
+        )
+    ax.axhline(0, color="black", linewidth=0.8)
+    # Extra headroom above the tallest bar (UNI, +0.0275) so its
+    # annotation clears the two-line title rather than overlapping it.
+    y_max, y_min = max(diffs), min(diffs)
+    ax.set_ylim(y_min - 0.003, y_max * 1.45)
+    ax.set_ylabel("Median difference in cosine similarity to baseline\n(hflip − vflip)")
+    ax.set_title(
+        "Figure 5.8: H5 – Flip Invariance, Within-Model Paired Comparison\n"
+        "(Wilcoxon signed-rank test; red outline = pre-registered prediction disconfirmed)",
+        fontsize=10,
+    )
+    legend_patches = [
+        mpatches.Patch(facecolor=FAMILY_COLORS[k], hatch=FAMILY_HATCHES[k], edgecolor="black", label=FAMILY_LABELS[k])
+        for k in ["dinov2", "clip"]
+    ]
+    ax.legend(handles=legend_patches, loc="upper right", fontsize=8, framealpha=0.9)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(axis="y", alpha=0.3, linestyle="--")
+    fig.tight_layout()
+    save_both_formats(fig, f"{OUT}/shared_fig_5_8_h5_flip_invariance")
+    plt.close(fig)
+
+
+# =======================================================================
+# FIGURE 5.9 (NEW): H6 -- solarization invariance, between-family comparison
+# =======================================================================
+def fig_h6_solarization_invariance():
+    """
+    Two bars: pooled mean cosine similarity to baseline under
+    solarization, DINOv2-family (UNI + Prov-GigaPath) versus CLIP-family
+    (CONCH + Quilt-LLaVA), from the between-family Mann-Whitney U test
+    (H6). Annotated with both effect sizes reported in Section 5.2 of the
+    prediction matrix (Cliff's delta, the effect size matching the
+    non-parametric test actually used, and Cohen's d, reported only for
+    cross-dissertation comparability and explicitly labelled secondary
+    there because both pooled groups failed the Shapiro-Wilk normality
+    check).
+    """
+    families = ["dinov2", "clip"]
+    labels = [FAMILY_LABELS[f] for f in families]
+    means = [H6_RESULTS[f]["mean_cosine_sim"] for f in families]
+    ns = [H6_RESULTS[f]["n"] for f in families]
+    colors = [FAMILY_COLORS[f] for f in families]
+    hatches = [FAMILY_HATCHES[f] for f in families]
+
+    fig, ax = plt.subplots(figsize=(5.5, 4.5))
+    bars = ax.bar(labels, means, color=colors, hatch=hatches, edgecolor="black", linewidth=0.8, width=0.5)
+    for b, v, n in zip(bars, means, ns):
+        ax.text(b.get_x() + b.get_width() / 2, v + 0.015, f"{v:.3f}\n(n={n:,})", ha="center", fontsize=9)
+    ax.set_ylim(0, 1.05)
+    ax.set_ylabel("Mean cosine similarity to baseline under solarization")
+    stars = p_value_stars(H6_RESULTS["p_value"])
+    ax.set_title(
+        "Figure 5.9: H6 – Solarization Invariance, Between-Family Comparison\n"
+        f"(Mann-Whitney U, {stars}; Cliff's δ = {H6_RESULTS['cliffs_delta']:.3f}, "
+        f"Cohen's d = {H6_RESULTS['cohens_d']:.3f} [secondary])",
+        fontsize=9.5,
+    )
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(axis="y", alpha=0.3, linestyle="--")
+    fig.tight_layout()
+    save_both_formats(fig, f"{OUT}/shared_fig_5_9_h6_solarization_invariance")
+    plt.close(fig)
+
+
+# =======================================================================
+# FIGURE 5.10 (NEW): Workstream 5 effect-size summary (H5 + H6 together)
+# =======================================================================
+def fig_workstream5_effect_size_summary():
+    """
+    A single forest-plot-style figure placing all five Workstream 5
+    effect sizes on one shared [-1, 1] axis: H5's four per-model 2 x
+    Cohen's g values and H6's one pooled Cliff's delta. Both statistics
+    are rank/sign-based and bounded in [-1, 1], which is what makes a
+    shared axis meaningful (Section 5.2 of the prediction matrix makes
+    this comparability argument explicitly), but they are NOT the same
+    statistic -- H5's is a within-model paired comparison, H6's is a
+    between-family pooled comparison -- so the two families are given
+    distinct marker shapes and a legend entry making the distinction
+    explicit, rather than a single undifferentiated set of dots that
+    would visually imply they are interchangeable.
+    """
+    rows = []  # (label, value, marker_family, color)
+    for m in H5_MODEL_ORDER:
+        r = H5_RESULTS[m]
+        rows.append((f"{MODEL_LABELS[m]} (H5)", r["effect_size_2g"], "h5", FAMILY_COLORS[r["family"]]))
+    rows.append(("DINOv2 vs. CLIP,\npooled (H6)", H6_RESULTS["cliffs_delta"], "h6", OKABE_ITO["reddish_purple"]))
+
+    fig, ax = plt.subplots(figsize=(6.5, 4.5))
+    y_pos = np.arange(len(rows))[::-1]
+    for y, (label, value, fam, color) in zip(y_pos, rows):
+        marker = "o" if fam == "h5" else "D"
+        ax.plot([0, value], [y, y], color="black", linewidth=1.0, zorder=1)
+        ax.scatter([value], [y], s=110, color=color, marker=marker,
+                   edgecolor="black", linewidth=1.0, zorder=2)
+        ax.text(value + (0.04 if value >= 0 else -0.04), y, f"{value:.3f}",
+                ha="left" if value >= 0 else "right", va="center", fontsize=8)
+    ax.axvline(0, color="black", linewidth=0.8)
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels([r[0] for r in rows], fontsize=9)
+    ax.set_xlim(-1.0, 1.0)
+    # Extra headroom below the lowest row (H6) so the legend has clear
+    # space rather than sitting on top of the H6 marker/annotation.
+    ax.set_ylim(min(y_pos) - 1.1, max(y_pos) + 0.6)
+    ax.set_xlabel("Effect size (bounded [−1, 1]; see legend for which statistic)")
+    ax.set_title("Figure 5.10: Workstream 5 Effect-Size Summary (H5 and H6)", fontsize=10)
+    legend_handles = [
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="grey", markeredgecolor="black",
+                   markersize=9, label="2 × Cohen's g (H5, within-model paired)"),
+        plt.Line2D([0], [0], marker="D", color="w", markerfacecolor=OKABE_ITO["reddish_purple"], markeredgecolor="black",
+                   markersize=9, label="Cliff's δ (H6, between-family pooled)"),
+    ]
+    ax.legend(handles=legend_handles, loc="lower center", fontsize=7.5, framealpha=0.95)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(axis="x", alpha=0.3, linestyle="--")
+    fig.tight_layout()
+    save_both_formats(fig, f"{OUT}/shared_fig_5_10_workstream5_effect_size_summary")
+    plt.close(fig)
+
+
+# =======================================================================
 # RUN ALL
 # =======================================================================
 def main():
@@ -700,7 +762,8 @@ def main():
 
     parser = argparse.ArgumentParser(
         description="Generate Phase B results figures for the dissertation "
-                     "(Model Cohort Option A and/or Option B)."
+                     "(Model Cohort Option A and/or Option B), plus the "
+                     "option-independent Workstream 5 figures (5.8-5.10)."
     )
     parser.add_argument(
         "--data-dir", default=DATA,
@@ -709,7 +772,7 @@ def main():
     )
     parser.add_argument(
         "--out-dir", default=OUT,
-        help=f"Directory to write generated PNG/SVG figures to (default: {OUT})",
+        help=f"Directory to write generated PNG figures to (default: {OUT})",
     )
     parser.add_argument(
         "--options", default="a,b", choices=["a", "b", "a,b"],
@@ -748,14 +811,20 @@ def main():
     for opt in selected_options:
         cfg = configs[opt]
         fig_cosine_heatmap(opt, cfg["models_order"])
-        fig_cosine_difference_heatmap(opt, cfg["models_order"])
         fig_severity_trends(opt, cfg["models_order"])
         fig_demographic_gap_heatmap(opt, cfg["models_order"])
         fig_h4_perturbation_ranking(opt)
-        fig_h4_perturbation_ranking_per_model(opt, cfg["models_order"])
         fig_h1_model_main_effect(opt, cfg["models_order"])
         fig_pairwise_comparison(opt, cfg["pairs"])
         print(f"Option {opt.upper()}: figures done.")
+
+    # Workstream 5 (H5, H6): option-independent, since all four models are
+    # tested regardless of which trio (Option A or B) is the dissertation's
+    # primary cohort. Generated once per run, not once per option.
+    fig_h5_flip_invariance()
+    fig_h6_solarization_invariance()
+    fig_workstream5_effect_size_summary()
+    print("Shared: Figures 5.8-5.10 (Workstream 5) done.")
 
     print("\nAll figures written to", OUT)
     for fn in sorted(os.listdir(OUT)):

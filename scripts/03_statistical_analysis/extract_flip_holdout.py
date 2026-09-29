@@ -4,7 +4,7 @@ extract_flip_holdout.py
 
 Workstream 5 (revised): two independent, out-of-sample, HARKing-safe
 invariance tests, both derived a priori from the DINOv2-vs-CLIP training
-recipe argument described in Nyamwaya_Workstream5_Prediction_Matrix.md.
+recipe argument described in docs/Nyamwaya_Workstream5_Prediction_Matrix.md.
 Read that document first -- it must be git-committed BEFORE this script
 is ever run against real (non-mock) embeddings, since the whole point of
 both tests is that the prediction precedes the evidence.
@@ -630,7 +630,18 @@ def run_paired_flip_test(sims: Dict[str, Dict[str, Dict[str, float]]]) -> Dict[s
         stat, p_value = wilcoxon(h_vals, v_vals, alternative="two-sided")
         median_diff = float(np.median(diff))
         n_pos, n_neg = int(np.sum(diff > 0)), int(np.sum(diff < 0))
-        rank_biserial = (n_pos - n_neg) / (n_pos + n_neg) if (n_pos + n_neg) > 0 else float("nan")
+        # NOTE (relabelled 29 September 2026): this statistic is the COUNT-based
+        # proportion of favourable vs. unfavourable paired differences, i.e.
+        # 2 x Cohen's g (Cohen, 1988: g = P - 0.5, P = n_pos/(n_pos+n_neg), so
+        # 2g = (n_pos - n_neg)/(n_pos + n_neg)). It was previously labelled
+        # "rank_biserial_effect_size" below, but the true matched-pairs
+        # rank-biserial correlation for a Wilcoxon signed-rank test is instead
+        # computed from the SUM of the signed ranks (Kerby, 2014, Comprehensive
+        # Psychology, 3, Article 1, https://doi.org/10.2466/11.IT.3.1), not the
+        # count of positive vs. negative pairs, so it is a numerically distinct
+        # statistic. See docs/Nyamwaya_Workstream5_Prediction_Matrix.md, Section
+        # 5.1's correction note, for the full derivation and citation trail.
+        cohens_g_x2 = (n_pos - n_neg) / (n_pos + n_neg) if (n_pos + n_neg) > 0 else float("nan")
 
         family = MODEL_FAMILY.get(model_name, "unknown")
         predicted_direction = "hflip_greater" if family == "dinov2" else "no_significant_difference"
@@ -650,7 +661,7 @@ def run_paired_flip_test(sims: Dict[str, Dict[str, Dict[str, float]]]) -> Dict[s
             "median_difference_h_minus_v": median_diff,
             "statistic": float(stat),
             "p_value": float(p_value),
-            "rank_biserial_effect_size": rank_biserial,
+            "cohens_g_x2_effect_size": cohens_g_x2,
             "predicted_direction": predicted_direction,
             "observed_direction": observed_direction,
             "prediction_confirmed": predicted_direction == observed_direction,

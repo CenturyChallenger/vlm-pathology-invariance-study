@@ -10,7 +10,7 @@
       "median_difference_h_minus_v": -0.00021650000000000835,
       "statistic": 3432065.5,
       "p_value": 4.399643515218385e-05,
-      "rank_biserial_effect_size": -0.05864037363777893,
+      "cohens_g_x2_effect_size": -0.05864037363777893,
       "predicted_direction": "no_significant_difference",
       "observed_direction": "vflip_greater",
       "prediction_confirmed": false
@@ -25,7 +25,7 @@
       "median_difference_h_minus_v": 0.0026924999999999866,
       "statistic": 1339442.0,
       "p_value": 5.46180376948772e-259,
-      "rank_biserial_effect_size": 0.5049299429164504,
+      "cohens_g_x2_effect_size": 0.5049299429164504,
       "predicted_direction": "no_significant_difference",
       "observed_direction": "hflip_greater",
       "prediction_confirmed": false
@@ -40,7 +40,7 @@
       "median_difference_h_minus_v": 0.00209750000000003,
       "statistic": 2828005.0,
       "p_value": 1.1193800175504762e-37,
-      "rank_biserial_effect_size": 0.1816294758692268,
+      "cohens_g_x2_effect_size": 0.1816294758692268,
       "predicted_direction": "hflip_greater",
       "observed_direction": "hflip_greater",
       "prediction_confirmed": true
@@ -55,7 +55,7 @@
       "median_difference_h_minus_v": 0.027520999999999962,
       "statistic": 548018.5,
       "p_value": 0.0,
-      "rank_biserial_effect_size": 0.720218011938749,
+      "cohens_g_x2_effect_size": 0.720218011938749,
       "predicted_direction": "hflip_greater",
       "observed_direction": "hflip_greater",
       "prediction_confirmed": true

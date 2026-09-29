@@ -47,7 +47,7 @@ project's bundled data/ folder. The summary statistics these three
 functions plot are instead hard-coded as module-level constants
 (H5_RESULTS, H6_RESULTS below), copied verbatim from the *already
 verified and internally cross-checked* results table in Section 5 of
-`Nyamwaya_Workstream5_Prediction_Matrix.md` (the post-registration
+`docs/Nyamwaya_Workstream5_Prediction_Matrix.md` (the post-registration
 addendum, added 29 September 2026, itself derived directly from that
 JSON file's contents). No number below was estimated, interpolated, or
 simulated.
@@ -68,7 +68,7 @@ proportion of favourable pairs) -- but this is algebraically distinct
 from the Wilcoxon-signed-rank rank-biserial correlation of Kerby (2014),
 which is computed from the SUM of the signed ranks, not from the COUNT
 of positive vs. negative pairs. See the relabelling note in
-`Nyamwaya_Workstream5_Prediction_Matrix.md` Section 5.1 for the full
+`docs/Nyamwaya_Workstream5_Prediction_Matrix.md` Section 5.1 for the full
 derivation and citation trail.
 
 OUTPUT
@@ -564,7 +564,7 @@ def fig_pairwise_comparison(option, model_pairs):
 # WORKSTREAM 5 DATA (H5, H6) -- see module docstring for provenance
 # =======================================================================
 # H5: within-model, matched-pairs Wilcoxon signed-rank test, hflip vs
-# vflip. Source: Nyamwaya_Workstream5_Prediction_Matrix.md, Section 5.1
+# vflip. Source: docs/Nyamwaya_Workstream5_Prediction_Matrix.md, Section 5.1
 # (post-registration addendum, 29 September 2026).
 #   median_diff       = median(hflip_cosine_sim - vflip_cosine_sim)
 #   effect_size_2g     = 2 x Cohen's g = (n_pos - n_neg) / (n_pos + n_neg)

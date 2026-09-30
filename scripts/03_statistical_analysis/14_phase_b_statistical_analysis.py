@@ -417,8 +417,69 @@ def two_sample_test(a: np.ndarray, b: np.ndarray) -> Dict[str, Any]:
     Mann-Whitney U otherwise. Returns a fully self-describing result dict
     (which test was used and why is recorded, not just the p-value), so a
     reviewer can audit the decision without re-running the code.
+
+    Zero-variance guard. Several (model, perturbation, severity) cells are
+    documented identity transforms (Perturbations 17 and 18, Brightness and
+    Contrast, at moderate severity -- see Section 4.5's parameter table):
+    every tile in both cohorts has cosine similarity exactly 1.0 to its own
+    unperturbed embedding, so both groups have variance exactly zero.
+    Welch's t-test divides a zero numerator by a zero denominator in this
+    case (`scipy.stats.ttest_ind` returns `nan` for both the statistic and
+    the p-value, with a "Precision loss occurred in moment calculation due
+    to catastrophic cancellation" warning, rather than raising), which
+    would silently propagate a NaN p-value into this cell's row and, via
+    `multipletests()` in `run_h2()`, into that cell's own Bonferroni-
+    corrected p-value (the correction is applied elementwise, so this does
+    not affect the correction for any other cell in the family). Shapiro-
+    Wilk is also undefined for constant input (scipy raises an "Input data
+    has range zero" warning), so this case is decided before normality
+    testing runs at all, not after.
+
+    Two zero-variance sub-cases are distinguished explicitly, each with a
+    well-defined outcome rather than an undefined one:
+      - Both groups are the same constant (the real Perturbation 17/18
+        case): the two distributions are identical, so there is no
+        detectable difference by construction. Reported as p_value=1.0,
+        the correct, well-defined result for two identical point masses.
+      - The groups are different constants (not observed in this study's
+        data, but a two-sample test must still return something defined
+        for it rather than crash or return NaN): every observation in `a`
+        differs from every observation in `b` in the same direction, so a
+        rank-based test would report the smallest possible two-sided
+        p-value. Reported as p_value=0.0.
     """
     a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    mean_a, mean_b = float(np.mean(a)), float(np.mean(b))
+    var_a = float(np.var(a, ddof=1)) if len(a) > 1 else 0.0
+    var_b = float(np.var(b, ddof=1)) if len(b) > 1 else 0.0
+
+    if var_a == 0.0 and var_b == 0.0:
+        identical = mean_a == mean_b
+        return {
+            "test_used": "zero_variance_identical" if identical else "zero_variance_distinct_constants",
+            "statistic": 0.0 if identical else (float("inf") if mean_a > mean_b else float("-inf")),
+            "p_value": 1.0 if identical else 0.0,
+            # cohens_d() already returns 0.0 whenever pooled_sd == 0 (its
+            # own zero-variance guard, lines 373-374 above); kept identical
+            # here rather than special-cased, since cosine similarity
+            # equal to a constant to machine precision in both cohorts is
+            # not usefully described by a standardised mean difference.
+            "cohens_d": 0.0,
+            "effect_size": effect_size_label(0.0),
+            "n_a": int(len(a)),
+            "n_b": int(len(b)),
+            "mean_a": mean_a,
+            "mean_b": mean_b,
+            # Shapiro-Wilk is never run for this cell: it is undefined for
+            # constant input, and the decision below does not depend on
+            # its result. The real result data this dissertation reports
+            # (option_{a,b}_h2_demographic_main_effect.csv) carries these
+            # fields empty for exactly these cells, which this matches.
+            "shapiro_p_a": None,
+            "shapiro_p_b": None,
+            "both_groups_normal": False,
+        }
+
     a_normal, a_p = normal_enough(a)
     b_normal, b_p = normal_enough(b)
     both_normal = a_normal and b_normal
@@ -443,8 +504,8 @@ def two_sample_test(a: np.ndarray, b: np.ndarray) -> Dict[str, Any]:
         "effect_size": effect_size_label(d),
         "n_a": int(len(a)),
         "n_b": int(len(b)),
-        "mean_a": float(np.mean(a)),
-        "mean_b": float(np.mean(b)),
+        "mean_a": mean_a,
+        "mean_b": mean_b,
         "shapiro_p_a": a_p,
         "shapiro_p_b": b_p,
         "both_groups_normal": both_normal,
